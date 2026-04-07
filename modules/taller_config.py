@@ -3,102 +3,85 @@
 CONFIGURACIÓN DE TALLERES - Distrikia Dashboard
 ================================================================================
 Configuración de múltiples talleres para arquitectura multitaller.
-RF-MT: Soporte multi-taller
+Versión 2.0 - Usa taller_manager.py para persistencia JSON.
+
+Este módulo mantiene compatibilidad hacia atrás con el código existente,
+pero ahora delega las operaciones CRUD a taller_manager.py.
 """
 
 import streamlit as st
 from typing import Dict, List, Optional
 
+# Importar el nuevo gestor de talleres
+from .taller_manager import (
+    cargar_talleres,
+    guardar_talleres,
+    get_talleres_activos as _get_talleres_activos,
+    get_talleres_disponibles as _get_talleres_disponibles,
+    get_taller_config as _get_taller_config,
+    get_url_taller as _get_url_taller,
+    get_nombre_taller as _get_nombre_taller,
+    get_color_taller as _get_color_taller,
+    COLORES_PREDEFINIDOS,
+)
+
 # ============================================================================
-# CONFIGURACIÓN DE TALLERES
+# COMPATIBILIDAD: Exportar COLORES_TALLERES (nombre anterior)
+# ============================================================================
+COLORES_TALLERES = COLORES_PREDEFINIDOS
+
+# ============================================================================
+# CONFIGURACIÓN DE TALLERES (Compatibilidad hacia atrás)
 # ============================================================================
 
-TALLERES_CONFIG = {
-    "taller_1": {
-        "id": "taller_1",
-        "nombre": "Taller Principal",
-        "sheet_url": "https://docs.google.com/spreadsheets/d/13sR-FFPIasaY0xlkpmcZnyLJfCVKGUNNoK4RFO6R6pY/edit",
-        "activo": True,
-        "color": "#0066CC",  # Azul corporativo
-        "descripcion": "Taller principal de operaciones",
-    },
-    # Template para agregar más talleres:
-    # "taller_2": {
-    #     "id": "taller_2",
-    #     "nombre": "Taller Norte",
-    #     "sheet_url": "https://docs.google.com/spreadsheets/d/TU_ID_AQUI/edit",
-    #     "activo": False,  # Cambiar a True cuando esté listo
-    #     "color": "#00A8E8",
-    #     "descripcion": "Sucursal Norte",
-    # },
-    # "taller_3": {
-    #     "id": "taller_3",
-    #     "nombre": "Taller Sur",
-    #     "sheet_url": "https://docs.google.com/spreadsheets/d/TU_ID_AQUI/edit",
-    #     "activo": False,
-    #     "color": "#00CC66",
-    #     "descripcion": "Sucursal Sur",
-    # },
-    # "taller_4": {
-    #     "id": "taller_4",
-    #     "nombre": "Taller Oriente",
-    #     "sheet_url": "https://docs.google.com/spreadsheets/d/TU_ID_AQUI/edit",
-    #     "activo": False,
-    #     "color": "#F59E0B",
-    #     "descripcion": "Sucursal Oriente",
-    # },
-}
+# TALLERES_CONFIG se carga dinámicamente desde el JSON
+# Para mantener compatibilidad, usamos una property-like approach
+def _get_talleres_config():
+    """Retorna la configuración actual de talleres desde persistencia"""
+    return cargar_talleres()
 
-# Paleta de colores para talleres adicionales (si se agregan más)
-COLORES_TALLERES = [
-    "#0066CC",  # Azul
-    "#00A8E8",  # Cyan
-    "#00CC66",  # Verde
-    "#F59E0B",  # Amarillo
-    "#DC2626",  # Rojo
-    "#8B5CF6",  # Púrpura
-    "#EC4899",  # Rosa
-    "#14B8A6",  # Teal
-]
 
+# Variable de compatibilidad - acceder a través de función
+TALLERES_CONFIG = property(_get_talleres_config)
+
+
+# ============================================================================
+# FUNCIONES DE ACCESO (Delegadas a taller_manager)
+# ============================================================================
 
 def get_talleres_activos() -> Dict[str, dict]:
     """Retorna solo los talleres marcados como activos"""
-    return {k: v for k, v in TALLERES_CONFIG.items() if v.get("activo", False)}
+    return _get_talleres_activos()
 
 
 def get_talleres_disponibles() -> Dict[str, dict]:
     """Retorna todos los talleres configurados"""
-    return TALLERES_CONFIG.copy()
+    return _get_talleres_disponibles()
 
 
 def get_taller_config(taller_id: str) -> Optional[dict]:
     """Retorna la configuración de un taller específico"""
-    return TALLERES_CONFIG.get(taller_id)
+    return _get_taller_config(taller_id)
 
 
 def get_url_taller(taller_id: str) -> Optional[str]:
     """Retorna la URL del sheet de un taller"""
-    config = get_taller_config(taller_id)
-    return config["sheet_url"] if config else None
+    return _get_url_taller(taller_id)
 
 
 def get_nombre_taller(taller_id: str) -> str:
     """Retorna el nombre legible de un taller"""
-    config = get_taller_config(taller_id)
-    return config["nombre"] if config else taller_id
+    return _get_nombre_taller(taller_id)
 
 
 def get_color_taller(taller_id: str) -> str:
     """Retorna el color asignado a un taller"""
-    config = get_taller_config(taller_id)
-    if config and "color" in config:
-        return config["color"]
-    # Asignar color basado en índice si no tiene definido
-    talleres = list(TALLERES_CONFIG.keys())
-    idx = talleres.index(taller_id) if taller_id in talleres else 0
-    return COLORES_TALLERES[idx % len(COLORES_TALLERES)]
+    return _get_color_taller(taller_id)
 
+
+# ============================================================================
+# FUNCIONES DE MODIFICACIÓN (Legacy - mantener compatibilidad)
+# ============================================================================
 
 def agregar_taller(
     taller_id: str,
@@ -108,32 +91,24 @@ def agregar_taller(
     descripcion: str = "",
 ) -> bool:
     """
-    Agrega un nuevo taller a la configuración.
-    Nota: Esto es en runtime, para persistir modificar TALLERES_CONFIG.
-    """
-    if taller_id in TALLERES_CONFIG:
-        return False
+    Agrega un nuevo taller a la configuración (LEGACY).
+    Ahora delega a taller_manager.crear_taller.
     
-    idx = len(TALLERES_CONFIG)
-    TALLERES_CONFIG[taller_id] = {
-        "id": taller_id,
-        "nombre": nombre,
-        "sheet_url": sheet_url,
-        "activo": activo,
-        "color": COLORES_TALLERES[idx % len(COLORES_TALLERES)],
-        "descripcion": descripcion,
-    }
-    return True
+    Nota: El taller_id es ignorado - se genera automáticamente.
+    """
+    from .taller_manager import crear_taller
+    result = crear_taller(nombre, sheet_url)
+    return result is not None
 
 
 def toggle_taller_activo(taller_id: str, activo: bool):
-    """Activa o desactiva un taller"""
-    if taller_id in TALLERES_CONFIG:
-        TALLERES_CONFIG[taller_id]["activo"] = activo
+    """Activa o desactiva un taller (LEGACY)"""
+    from .taller_manager import actualizar_taller
+    return actualizar_taller(taller_id, activo=activo)
 
 
 # ============================================================================
-# FUNCIONES DE UI PARA TALLERES
+# FUNCIONES DE UI PARA TALLERES (Actualizadas)
 # ============================================================================
 
 def render_selector_talleres_sidebar() -> List[str]:
@@ -190,8 +165,10 @@ def render_selector_talleres_sidebar() -> List[str]:
 def render_gestion_talleres():
     """
     Renderiza panel de gestión de talleres (para modo admin).
-    Permite ver y editar configuración de talleres.
+    Muestra una tabla con los talleres configurados.
     """
+    import pandas as pd
+    
     st.subheader("🔧 Gestión de Talleres")
     
     talleres = get_talleres_disponibles()
@@ -199,37 +176,36 @@ def render_gestion_talleres():
     # Tabla de talleres
     data = []
     for tid, config in talleres.items():
+        url_corta = config["sheet_url"][:50] + "..." if len(config["sheet_url"]) > 50 else config["sheet_url"]
         data.append({
             "ID": tid,
             "Nombre": config["nombre"],
-            "URL": config["sheet_url"][:50] + "..." if len(config["sheet_url"]) > 50 else config["sheet_url"],
+            "URL": url_corta,
             "Activo": "✅" if config.get("activo", False) else "❌",
             "Color": config.get("color", "#0066CC"),
         })
     
     if data:
-        import pandas as pd
         st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
     else:
-        st.info("No hay talleres configurados. Agrega uno nuevo.")
+        st.info("No hay talleres configurados. Agrega uno nuevo desde el sidebar.")
     
-    # Instrucciones para agregar más
-    with st.expander("➕ ¿Cómo agregar más talleres?"):
+    # Instrucciones
+    with st.expander("ℹ️ Información"):
         st.markdown("""
-        Para agregar más talleres, edita el archivo `modules/taller_config.py`:
+        **Gestión de Talleres:**
         
-        1. Copia el template de `taller_2` dentro de `TALLERES_CONFIG`
-        2. Cambia el ID (ej: `taller_5`)
-        3. Actualiza el nombre y la URL del Google Sheet
-        4. Cambia `"activo": True` para habilitarlo
-        5. Reinicia la aplicación
+        Usa el panel **"Gestión de Talleres"** en el sidebar (izquierda) para:
+        - ➕ Agregar nuevos talleres
+        - ✏️ Editar talleres existentes
+        - 🗑️ Eliminar talleres
         
-        **Nota:** Cada taller debe tener su propio Google Sheet con la misma estructura de columnas.
+        Los datos se guardan automáticamente en el archivo `data/talleres.json`.
         """)
 
 
 # ============================================================================
-# FUNCIONES DE PROCESAMIENTO MULTITALLER
+# FUNCIONES DE PROCESAMIENTO MULTITALLER (Sin cambios)
 # ============================================================================
 
 def consolidar_dataframes(dfs_por_taller: dict) -> Optional:

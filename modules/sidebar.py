@@ -3,7 +3,7 @@
 SIDEBAR - Distrikia Dashboard
 ================================================================================
 Funciones para el panel lateral: configuración, filtros y auto-refresh.
-Soporte multitaller - RF-MT: Selector de talleres
+Soporte multitaller con selector de talleres y CRUD integrado.
 """
 
 import streamlit as st
@@ -12,11 +12,17 @@ from datetime import datetime
 from typing import List, Dict, Optional
 
 from .taller_config import (
-    render_selector_talleres_sidebar,
+    render_selector_talleres_sidebar as _render_selector_legacy,
     get_taller_config,
     get_nombre_taller,
     get_color_taller,
-    TALLERES_CONFIG
+    get_talleres_disponibles,
+)
+
+from .taller_manager import (
+    render_crud_talleres_sidebar,
+    get_talleres_activos,
+    cargar_talleres,
 )
 
 
@@ -27,7 +33,7 @@ from .taller_config import (
 def render_sidebar():
     """
     Configuración y filtros en sidebar.
-    Versión multitaller con selector de talleres.
+    Versión multitaller con CRUD de talleres integrado.
     """
     
     st.sidebar.markdown("""
@@ -39,9 +45,16 @@ def render_sidebar():
     """, unsafe_allow_html=True)
     
     # =========================================================================
-    # SELECCIÓN DE TALLERES (Nuevo)
+    # SECCIÓN: CRUD DE TALLERES (Nuevo)
     # =========================================================================
-    talleres_seleccionados = render_selector_talleres_sidebar()
+    render_crud_talleres_sidebar()
+    
+    st.sidebar.divider()
+    
+    # =========================================================================
+    # SECCIÓN: SELECCIÓN DE TALLERES ACTIVOS
+    # =========================================================================
+    talleres_seleccionados = _render_selector_talleres_moderno()
     
     # Guardar en session state
     st.session_state['talleres_seleccionados'] = talleres_seleccionados
@@ -93,6 +106,63 @@ def render_sidebar():
     return talleres_seleccionados, auto_refresh
 
 
+def _render_selector_talleres_moderno() -> List[str]:
+    """
+    Renderiza el selector moderno de talleres activos.
+    Retorna la lista de IDs de talleres seleccionados.
+    """
+    st.sidebar.header("🏪 Talleres a Visualizar")
+    
+    talleres = get_talleres_activos()
+    
+    if not talleres:
+        st.sidebar.warning("⚠️ No hay talleres activos. Agrega uno en 'Gestión de Talleres'.")
+        return []
+    
+    # Checkbox para seleccionar todos
+    seleccionar_todos = st.sidebar.checkbox("✅ Seleccionar todos", value=True, key="sel_todos")
+    
+    seleccionados = []
+    
+    if seleccionar_todos:
+        # Seleccionar todos los activos
+        seleccionados = list(talleres.keys())
+        st.sidebar.info(f"📊 {len(seleccionados)} taller(es) seleccionado(s)")
+        
+        # Mostrar lista compacta
+        for tid, config in talleres.items():
+            color = config.get("color", "#0066CC")
+            st.sidebar.markdown(
+                f"<div style='display:flex;align-items:center;margin:2px 0;'>"
+                f"<div style='width:10px;height:10px;background:{color};border-radius:50%;margin-right:8px;'></div>"
+                f"<span style='font-size:0.8rem;'>{config['nombre']}</span>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+    else:
+        # Mostrar checkboxes individuales
+        st.sidebar.markdown("**Selecciona los talleres:**")
+        for taller_id, config in talleres.items():
+            col1, col2 = st.sidebar.columns([0.12, 0.88])
+            
+            with col1:
+                color = config.get("color", "#0066CC")
+                st.markdown(
+                    f"<div style='width:12px;height:12px;background:{color};"
+                    f"border-radius:50%;margin-top:8px;'></div>",
+                    unsafe_allow_html=True
+                )
+            
+            with col2:
+                if st.checkbox(config["nombre"], value=True, key=f"chk_{taller_id}"):
+                    seleccionados.append(taller_id)
+    
+    if not seleccionados:
+        st.sidebar.warning("⚠️ Selecciona al menos un taller")
+    
+    return seleccionados
+
+
 # ============================================================================
 # FILTROS DE DATOS (Actualizado para multitaller)
 # ============================================================================
@@ -122,7 +192,8 @@ def render_filtros(df):
                 with cols_talleres[idx]:
                     # Buscar color del taller
                     color = "#0066CC"
-                    for tid, tconf in TALLERES_CONFIG.items():
+                    all_talleres = cargar_talleres()
+                    for tid, tconf in all_talleres.items():
                         if tconf["nombre"] == taller and "color" in tconf:
                             color = tconf["color"]
                             break
@@ -147,20 +218,20 @@ def render_filtros(df):
     # =========================================================================
     
     # Filtro de Año
-    if 'AÑO' in df.columns:
+    if df is not None and 'AÑO' in df.columns:
         años = sorted(df['AÑO'].dropna().unique(), reverse=True)
         años_options = ["Todos"] + [str(int(a)) for a in años if a > 0]
         filtros['año'] = st.sidebar.selectbox("📅 Año", años_options)
     
     # Filtro de Mes
-    if 'MES' in df.columns:
+    if df is not None and 'MES' in df.columns:
         meses = sorted(df['MES'].dropna().unique())
         meses_names = ["Todos"] + [datetime(2000, int(m), 1).strftime('%B') for m in meses if m > 0]
         mes_sel = st.sidebar.selectbox("📆 Mes", meses_names)
         filtros['mes'] = mes_sel if mes_sel == "Todos" else meses_names.index(mes_sel)
     
     # Filtro de Compañía
-    if 'COMPAÑIA_DE_SEGUROS' in df.columns:
+    if df is not None and 'COMPAÑIA_DE_SEGUROS' in df.columns:
         cias = sorted(df['COMPAÑIA_DE_SEGUROS'].dropna().unique())
         cias = [c for c in cias if c != '']
         filtros['compañia'] = st.sidebar.multiselect(
@@ -170,7 +241,7 @@ def render_filtros(df):
         )
     
     # Filtro de Estado
-    if 'ESTATUS' in df.columns:
+    if df is not None and 'ESTATUS' in df.columns:
         estados = sorted(df['ESTATUS'].dropna().unique())
         estados = [e for e in estados if e != '']
         filtros['estado'] = st.sidebar.multiselect(
@@ -180,7 +251,7 @@ def render_filtros(df):
         )
     
     # Filtro de Acción
-    if 'ACCION' in df.columns:
+    if df is not None and 'ACCION' in df.columns:
         acciones = sorted(df['ACCION'].dropna().unique())
         acciones = [a for a in acciones if a != '']
         filtros['accion'] = st.sidebar.multiselect(
@@ -190,7 +261,7 @@ def render_filtros(df):
         )
     
     # Filtro de rango de fechas
-    if 'FECHA_INGR' in df.columns:
+    if df is not None and 'FECHA_INGR' in df.columns:
         st.sidebar.divider()
         st.sidebar.subheader("📅 Rango de Fechas")
         

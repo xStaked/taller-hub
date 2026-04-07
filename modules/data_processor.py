@@ -87,7 +87,7 @@ def procesar_dataframe(df, fuente="Google Sheets"):
     date_cols = ['FECHA_INGR', 'FECHA_AUTO']
     for col in date_cols:
         if col in df.columns:
-            df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
+            df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=False)
             add_log(f"Columna fecha procesada: {col}")
     
     # Extraer AÑO y MES si no existen

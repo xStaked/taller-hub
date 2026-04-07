@@ -176,7 +176,7 @@ def render_grafico_comparativo_ahorro(df):
         yaxis_tickformat="$,.0f"
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 
 def render_grafico_tendencia_por_taller(df):
@@ -246,7 +246,7 @@ def render_grafico_tendencia_por_taller(df):
         yaxis_tickformat="$,.0f"
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 
 def render_heatmap_talleres_meses(df):
@@ -291,7 +291,7 @@ def render_heatmap_talleres_meses(df):
     
     fig.update_layout(height=400)
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 
 def render_distribucion_por_taller(df):
@@ -344,7 +344,7 @@ def render_distribucion_por_taller(df):
         showlegend=True
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 
 # ============================================================================
@@ -396,7 +396,7 @@ def render_tabla_resumen_talleres(df):
     display.columns = ["Taller", "Reparaciones", "Vehículos", "Ahorro Total", 
                        "Promedio", "Honorarios", "Utilidad", "Eficiencia"]
     
-    st.dataframe(display, use_container_width=True, hide_index=True)
+    st.dataframe(display, width='stretch', hide_index=True)
     
     # Botón de exportación
     col1, col2 = st.columns([1, 4])

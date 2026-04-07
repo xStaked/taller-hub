@@ -133,7 +133,7 @@ def render_export_section(df_filtered, filtros):
             data=excel_buffer,
             file_name=f"distrikia_reporte_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
+            width='stretch'
         )
     
     # Exportar CSV
@@ -144,12 +144,12 @@ def render_export_section(df_filtered, filtros):
             data=csv_data,
             file_name=f"distrikia_datos_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
             mime="text/csv",
-            use_container_width=True
+            width='stretch'
         )
     
     # Generar PDF (placeholder)
     with col_exp3:
-        if st.button("📑 Generar Reporte PDF", use_container_width=True):
+        if st.button("📑 Generar Reporte PDF", width='stretch'):
             st.info("💡 Para PDF: Usa la función 'Imprimir a PDF' de tu navegador (Ctrl+P)")
 
 

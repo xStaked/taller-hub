@@ -1,5 +1,4 @@
-
-gitignore = '''# DISTRIKIA - Archivos a ignorar
+# DISTRIKIA - Archivos a ignorar
 
 # Python
 __pycache__/
@@ -30,6 +29,7 @@ wheels/
 .streamlit/secrets.toml
 !/.streamlit/config.toml
 .streamlit/credentials.json
+
 # Jupyter Notebook
 .ipynb_checkpoints
 
@@ -47,13 +47,9 @@ Thumbs.db
 # Datos locales (no subir datos reales)
 *.csv
 *.xlsx
-!requirements.txt
+
+# Datos de configuración dinámica (generados por la app)
+data/talleres.json
 
 # Logs
 *.log
-'''
-
-with open('/mnt/kimi/output/.gitignore', 'w') as f:
-    f.write(gitignore)
-
-print("✅ .gitignore generado")

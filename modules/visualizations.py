@@ -168,7 +168,7 @@ def render_grafico_ahorro_mes(df):
     # Formato de eje Y como moneda
     fig.update_yaxes(tickformat='$,.0f')
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 
 # ============================================================================
@@ -211,7 +211,7 @@ def render_grafico_causales(df):
         coloraxis_colorbar=dict(title="Cantidad")
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 
 # ============================================================================
@@ -283,7 +283,7 @@ def render_grafico_tasa_imprevistos(df):
         yaxis=dict(range=[0, max(100, df_mes['TASA'].max() * 1.2)])
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 
 # ============================================================================
@@ -363,7 +363,7 @@ def render_grafico_cambio_repuestos(df):
     fig.update_yaxes(title_text="Cantidad de Cambios", secondary_y=False)
     fig.update_yaxes(title_text="Ahorro ($)", secondary_y=True, tickformat='$,.0f')
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 
 # ============================================================================
@@ -432,7 +432,7 @@ def render_tabla_detalle(df):
     # Mostrar tabla
     st.dataframe(
         df_display.iloc[inicio:fin],
-        use_container_width=True,
+        width='stretch',
         height=500,
         hide_index=True
     )
@@ -481,7 +481,7 @@ def render_recuperacion_mensual(df):
     st.dataframe(
         resumen_display[['PERIODO', 'VEHICULOS', 'CANTIDAD', 'RECUPERACION', 
                         '%_HONORARIOS', 'VALOR_HONORARIOS', 'PAGOS']],
-        use_container_width=True,
+        width='stretch',
         hide_index=True,
         height=400
     )
