@@ -1,20 +1,24 @@
 """
 ================================================================================
 DISTRIKIA - Sistema de Gestión de Ahorros y Análisis de Talleres Automotrices
-Dashboard Ejecutivo con Auto-refresh
-Versión: 1.0.0 | Fecha: Abril 2026
+Dashboard Ejecutivo con Auto-refresh - VERSIÓN MULTITALLER
+Versión: 2.0.0 | Fecha: Abril 2026
 Stakeholders: Alexander Cano (Analista/Gerente), Sergio Romero (Operativo)
 ================================================================================
 
-ARCHIVO PRINCIPAL - Entry Point
-Este archivo ha sido modularizado. La lógica se encuentra en el paquete modules/.
+ARCHIVO PRINCIPAL - Entry Point (Multitaller)
+Soporta múltiples fuentes de datos (varios Google Sheets de diferentes talleres)
 """
 
 # Importar configuración
 from modules.config import setup_page_config, apply_custom_css
 
-# Importar carga de datos
-from modules.data_loader import load_data_from_sheets
+# Importar carga de datos (multitaller)
+from modules.data_loader import (
+    load_data_multitaller,
+    get_estadisticas_carga,
+    render_resumen_carga
+)
 from modules.data_processor import get_debug_logs
 
 # Importar validaciones
@@ -31,8 +35,20 @@ from modules.visualizations import (
     render_recuperacion_mensual
 )
 
+# Importar visualizaciones multitaller
+from modules.visualizations_multitaller import (
+    render_kpis_multitaller,
+    render_ranking_talleres,
+    render_vista_multitaller
+)
+
 # Importar sidebar y filtros
-from modules.sidebar import render_sidebar, render_filtros, aplicar_filtros
+from modules.sidebar import (
+    render_sidebar, 
+    render_filtros, 
+    aplicar_filtros,
+    render_resumen_talleres_sidebar
+)
 
 # Importar componentes UI
 from modules.components import (
@@ -45,6 +61,9 @@ from modules.components import (
     render_error_state,
     render_empty_state
 )
+
+# Importar configuración de talleres
+from modules.taller_config import get_talleres_activos
 
 import streamlit as st
 
@@ -62,87 +81,203 @@ apply_custom_css()
 # ============================================================================
 
 def main():
-    """Función principal del dashboard"""
+    """Función principal del dashboard - Versión Multitaller"""
     
     # Header
     render_header()
     
-    # Sidebar
-    sheet_url, auto_refresh = render_sidebar()
+    # =========================================================================
+    # SIDEBAR - Selección de talleres y configuración
+    # =========================================================================
+    talleres_seleccionados, auto_refresh = render_sidebar()
     
-    # DEBUG
-    st.sidebar.write(f"📊 Intentando cargar desde: {sheet_url[:50]}...")
-    
-    # Cargar datos
-    with st.spinner("🔄 Cargando datos desde Google Sheets..."):
-        df, error = load_data_from_sheets(sheet_url)
-    
-    # Panel de Debug
-    render_debug_panel(df, error, get_debug_logs())
-    
-    # Manejar errores
-    if error:
-        render_error_state(error)
+    # Verificar si hay talleres configurados
+    if not talleres_seleccionados:
+        st.warning("⚠️ No hay talleres seleccionados. Activa al menos un taller en la configuración.")
+        
+        # Mostrar ayuda para configurar talleres
+        with st.expander("ℹ️ ¿Cómo configurar talleres?", expanded=True):
+            st.markdown("""
+            ### Configuración de Talleres
+            
+            Para agregar más talleres, edita el archivo `modules/taller_config.py`:
+            
+            1. Copia el template de `taller_2` dentro de `TALLERES_CONFIG`
+            2. Cambia el ID (ej: `taller_5`)
+            3. Actualiza el nombre y la URL del Google Sheet
+            4. Cambia `"activo": True` para habilitarlo
+            5. Reinicia la aplicación
+            
+            **Nota:** Cada taller debe tener su propio Google Sheet con la misma estructura de columnas.
+            """)
+        
+        render_footer()
         return
     
+    # =========================================================================
+    # CARGA DE DATOS MULTITALLER
+    # =========================================================================
+    
+    # Barra de progreso para carga
+    progress_bar = st.progress(0, text="Iniciando carga de talleres...")
+    
+    with st.spinner(f"🔄 Cargando datos de {len(talleres_seleccionados)} taller(es)..."):
+        df, errores = load_data_multitaller(
+            talleres_ids=talleres_seleccionados,
+            progress_bar=progress_bar
+        )
+    
+    # Limpiar barra de progreso
+    progress_bar.empty()
+    
+    # Mostrar resumen de carga en sidebar
+    stats = get_estadisticas_carga(errores, len(talleres_seleccionados))
+    render_resumen_carga(stats)
+    
+    # =========================================================================
+    # PANEL DE DEBUG
+    # =========================================================================
+    render_debug_panel(df, None, get_debug_logs())
+    
+    # =========================================================================
+    # MANEJO DE ERRORES
+    # =========================================================================
+    
+    # Si no se cargó ningún dato
     if df is None or df.empty:
-        render_empty_state()
+        error_msg = "No se pudieron cargar datos de ningún taller."
+        if errores:
+            error_msg += "\n\n**Errores por taller:**"
+            for tid, err in errores.items():
+                from modules.taller_config import get_nombre_taller
+                error_msg += f"\n- **{get_nombre_taller(tid)}:** {err}"
+        
+        render_error_state(error_msg)
+        
+        # Mostrar ayuda
+        with st.expander("🔧 Ayuda para resolver el problema"):
+            st.markdown("""
+            ### Posibles soluciones:
+            
+            1. **Verifica las URLs** de los Google Sheets en `modules/taller_config.py`
+            2. **Confirma los permisos** de acceso a los spreadsheets
+            3. **Verifica que las hojas** tengan la estructura correcta (columna 'BASE DE DATOS')
+            4. **Revisa las credenciales** de Google Sheets API
+            
+            Para debug, puedes usar el modo manual en "Configuración Avanzada" en el sidebar.
+            """)
+        
+        render_footer()
         return
+    
+    # Si se cargaron datos parcialmente (algunos talleres fallaron)
+    if errores and len(errores) < len(talleres_seleccionados):
+        st.warning(f"⚠️ Se cargaron datos de {stats['exitosos']} taller(es), pero {stats['con_error']} fallaron.")
+    
+    # =========================================================================
+    # DATOS CARGADOS - CONTINUAR CON DASHBOARD
+    # =========================================================================
+    
+    # Verificar si es multitaller
+    es_multitaller = "TALLER_ORIGEN" in df.columns and df["TALLER_ORIGEN"].nunique() > 1
+    
+    # Mostrar badge de multitaller
+    if es_multitaller:
+        st.success(f"🏪 **Modo Multitaller Activo** - {df['TALLER_ORIGEN'].nunique()} talleres cargados con {len(df)} registros totales")
     
     # Información de datos cargados
+    render_data_info(df, df)
     
-    # Validaciones (RF-005)
+    # Mostrar resumen de talleres en sidebar
+    render_resumen_talleres_sidebar(df)
+    
+    # =========================================================================
+    # VALIDACIONES
+    # =========================================================================
     alerts = run_validations(df)
     render_alerts(alerts)
     
-    # Filtros
+    # =========================================================================
+    # FILTROS
+    # =========================================================================
     filtros = render_filtros(df)
     df_filtered = aplicar_filtros(df, filtros)
     
-    # Info de datos y filtros
-    render_data_info(df, df_filtered)
+    # Información de filtros aplicados
+    if len(df_filtered) != len(df):
+        st.info(f"📊 Filtros aplicados: mostrando {len(df_filtered)} de {len(df)} registros")
     
     # =========================================================================
-    # DASHBOARD CONTENT
+    # SECCIÓN: KPIs COMPARATIVOS MULTITALLER
     # =========================================================================
+    if es_multitaller:
+        render_kpis_multitaller(df_filtered)
+        
+        st.divider()
+        
+        render_ranking_talleres(df_filtered)
+        
+        st.divider()
+        
+        # Vista detallada multitaller con pestañas
+        render_vista_multitaller(df_filtered, key_suffix="main")
+        
+        st.divider()
     
-    # KPIs (RF-003.1)
+    # =========================================================================
+    # SECCIÓN: KPIs PRINCIPALES (Consolidados)
+    # =========================================================================
+    st.subheader("📊 Métricas Consolidadas" if es_multitaller else "📊 Métricas Principales")
     render_kpis(df_filtered)
     
     st.divider()
+    
+    # =========================================================================
+    # SECCIÓN: GRÁFICOS
+    # =========================================================================
     
     # Primera fila de gráficos
     col1, col2 = st.columns(2)
     
     with col1:
-        render_grafico_ahorro_mes(df_filtered)  # RF-003.4
+        render_grafico_ahorro_mes(df_filtered)
     
     with col2:
-        render_grafico_causales(df_filtered)  # RF-003.5
+        render_grafico_causales(df_filtered)
     
     # Segunda fila de gráficos
     col3, col4 = st.columns(2)
     
     with col3:
-        render_grafico_tasa_imprevistos(df_filtered)  # RF-003.3
+        render_grafico_tasa_imprevistos(df_filtered)
     
     with col4:
-        render_grafico_cambio_repuestos(df_filtered)  # RF-003.2
+        render_grafico_cambio_repuestos(df_filtered)
     
     st.divider()
     
-    # Recuperación mensual (RF-003.7)
+    # =========================================================================
+    # SECCIÓN: RECUPERACIÓN MENSUAL
+    # =========================================================================
     render_recuperacion_mensual(df_filtered)
     
     st.divider()
     
-    # Tabla detallada (RF-003.6)
+    # =========================================================================
+    # SECCIÓN: TABLA DETALLADA
+    # =========================================================================
     render_tabla_detalle(df_filtered)
     
-    # Exportación (RF-004)
+    st.divider()
+    
+    # =========================================================================
+    # SECCIÓN: EXPORTACIÓN
+    # =========================================================================
     render_export_section(df_filtered, filtros)
     
-    # Footer
+    # =========================================================================
+    # FOOTER
+    # =========================================================================
     render_footer()
 
 

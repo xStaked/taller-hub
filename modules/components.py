@@ -32,8 +32,9 @@ def render_footer():
 def render_debug_panel(df, error, debug_logs):
     """
     Panel de debug para diagnosticar problemas con los datos
+    Soporte multitaller
     """
-    with st.expander("🔧 Panel de Debug (Diagnóstico)", expanded=True):
+    with st.expander("🔧 Panel de Debug (Diagnóstico)", expanded=False):
         
         col1, col2 = st.columns([3, 1])
         with col2:
@@ -49,6 +50,17 @@ def render_debug_panel(df, error, debug_logs):
             st.write(f"**df.shape:** {df.shape}")
             st.write(f"**df.empty:** {df.empty}")
             st.write(f"**Columnas:** {list(df.columns)}")
+            
+            # Información de multitaller
+            if "TALLER_ORIGEN" in df.columns:
+                st.write("**Información Multitaller:**")
+                st.write(f"  - Talleres únicos: {df['TALLER_ORIGEN'].nunique()}")
+                st.write(f"  - Lista de talleres: {df['TALLER_ORIGEN'].unique().tolist()}")
+                
+                # Desglose por taller
+                st.write("  - Registros por taller:")
+                for taller, count in df.groupby("TALLER_ORIGEN").size().items():
+                    st.write(f"    - {taller}: {count}")
             
             # Verificar columnas críticas para gráficas
             cols_criticas = ['AÑO', 'MES', 'DIFERENCIA', 'CAUSAL', 'ACCION', 'IMPREVISTO']
@@ -84,8 +96,22 @@ def render_alerts(alerts):
 
 def render_data_info(df, df_filtered):
     """Muestra información sobre los datos cargados y filtros aplicados"""
-    st.success(f"✅ Datos cargados: {len(df)} registros | Última actualización: {datetime.now().strftime('%H:%M:%S')}")
     
+    # Información básica
+    mensaje = f"✅ Datos cargados: **{len(df)}** registros | Última actualización: {datetime.now().strftime('%H:%M:%S')}"
+    
+    # Si es multitaller, mostrar desglose por taller
+    if "TALLER_ORIGEN" in df.columns:
+        talleres = df["TALLER_ORIGEN"].unique()
+        if len(talleres) > 1:
+            # Crear desglose por taller
+            desglose = df.groupby("TALLER_ORIGEN").size().to_dict()
+            detalle = " | ".join([f"**{t}**: {c} regs" for t, c in desglose.items()])
+            mensaje += f"\n\n🏪 **Desglose por taller:** {detalle}"
+    
+    st.success(mensaje)
+    
+    # Información de filtros aplicados
     if len(df_filtered) != len(df):
         st.info(f"📊 Mostrando {len(df_filtered)} de {len(df)} registros (filtros aplicados)")
 

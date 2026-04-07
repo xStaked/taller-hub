@@ -3,11 +3,21 @@
 SIDEBAR - Distrikia Dashboard
 ================================================================================
 Funciones para el panel lateral: configuración, filtros y auto-refresh.
+Soporte multitaller - RF-MT: Selector de talleres
 """
 
 import streamlit as st
 import time
 from datetime import datetime
+from typing import List, Dict, Optional
+
+from .taller_config import (
+    render_selector_talleres_sidebar,
+    get_taller_config,
+    get_nombre_taller,
+    get_color_taller,
+    TALLERES_CONFIG
+)
 
 
 # ============================================================================
@@ -15,41 +25,62 @@ from datetime import datetime
 # ============================================================================
 
 def render_sidebar():
-    """Configuración y filtros en sidebar"""
+    """
+    Configuración y filtros en sidebar.
+    Versión multitaller con selector de talleres.
+    """
     
     st.sidebar.markdown("""
     <div style="text-align: center; margin-bottom: 2rem;">
         <h2 style="color: #0066CC; margin-bottom: 0.5rem;">🚗 DISTRIKIA</h2>
         <p style="color: #64748B; font-size: 0.9rem;">Sistema de Gestión de Ahorros</p>
+        <p style="color: #00CC66; font-size: 0.75rem;">🏪 Modo Multitaller</p>
     </div>
     """, unsafe_allow_html=True)
     
-    # Configuración de conexión
-    st.sidebar.header("🔗 Conexión a Datos")
-    
-    # URL de Google Sheets
-    default_url = st.secrets.get("SHEET_URL", "https://docs.google.com/spreadsheets/d/13sR-FFPIasaY0xlkpmcZnyLJfCVKGUNNoK4RFO6R6pY/edit")
-    if not default_url:
-        default_url = "https://docs.google.com/spreadsheets/d/TU_ID/edit"
-    
-    sheet_url = st.sidebar.text_input(
-        "URL de Google Sheets",
-        value=default_url,
-        type="password",
-        help="Pega aquí la URL de tu hoja de cálculo"
-    )
+    # =========================================================================
+    # SELECCIÓN DE TALLERES (Nuevo)
+    # =========================================================================
+    talleres_seleccionados = render_selector_talleres_sidebar()
     
     # Guardar en session state
-    st.session_state['sheet_url'] = sheet_url
+    st.session_state['talleres_seleccionados'] = talleres_seleccionados
+    
+    # =========================================================================
+    # CONFIGURACIÓN DE CONEXIÓN (Legacy - para compatibilidad)
+    # =========================================================================
+    with st.sidebar.expander("🔗 Configuración Avanzada", expanded=False):
+        st.caption("Conexión manual a un sheet específico:")
+        
+        # URL de Google Sheets (para uso manual/debug)
+        default_url = ""
+        try:
+            default_url = st.secrets.get("SHEET_URL", "")
+        except:
+            pass
+        
+        if not default_url:
+            default_url = "https://docs.google.com/spreadsheets/d/TU_ID/edit"
+        
+        sheet_url = st.text_input(
+            "URL de Google Sheets (manual)",
+            value=default_url,
+            type="password",
+            help="Solo usar para debug o conexión directa a un taller"
+        )
+        
+        st.session_state['sheet_url_manual'] = sheet_url
     
     st.sidebar.divider()
     
-    # Auto-refresh
+    # =========================================================================
+    # AUTO-REFRESH
+    # =========================================================================
     st.sidebar.header("⏱️ Actualización Automática")
     auto_refresh = st.sidebar.toggle("Auto-refresh activado", value=False)
     
     if auto_refresh:
-        refresh_interval = st.sidebar.slider("Intervalo (segundos)", 10, 300, 30, step=10)
+        refresh_interval = st.sidebar.slider("Intervalo (segundos)", 10, 300, 60, step=10)
         st.sidebar.caption(f"Última actualización: {datetime.now().strftime('%H:%M:%S')}")
         
         # Trigger refresh
@@ -58,19 +89,62 @@ def render_sidebar():
     
     st.sidebar.divider()
     
-    return sheet_url, auto_refresh
+    # Retornar talleres seleccionados y auto_refresh
+    return talleres_seleccionados, auto_refresh
 
 
 # ============================================================================
-# FILTROS DE DATOS
+# FILTROS DE DATOS (Actualizado para multitaller)
 # ============================================================================
 
 def render_filtros(df):
-    """Filtros dinámicos basados en los datos"""
+    """
+    Filtros dinámicos basados en los datos.
+    Incluye filtro por taller si hay múltiples talleres.
+    """
     
     st.sidebar.header("🔍 Filtros de Datos")
     
     filtros = {}
+    
+    # =========================================================================
+    # FILTRO POR TALLER (Nuevo - solo si hay múltiples talleres)
+    # =========================================================================
+    if df is not None and "TALLER_ORIGEN" in df.columns:
+        talleres_en_datos = sorted(df["TALLER_ORIGEN"].unique())
+        
+        if len(talleres_en_datos) > 1:
+            st.sidebar.subheader("🏪 Filtrar por Taller")
+            
+            # Mostrar talleres con sus colores
+            cols_talleres = st.sidebar.columns(len(talleres_en_datos))
+            for idx, taller in enumerate(talleres_en_datos):
+                with cols_talleres[idx]:
+                    # Buscar color del taller
+                    color = "#0066CC"
+                    for tid, tconf in TALLERES_CONFIG.items():
+                        if tconf["nombre"] == taller and "color" in tconf:
+                            color = tconf["color"]
+                            break
+                    
+                    st.markdown(
+                        f"<div style='width:12px;height:12px;background:{color};"
+                        f"border-radius:50%;display:inline-block;margin-right:5px;'></div>",
+                        unsafe_allow_html=True
+                    )
+            
+            filtros["talleres"] = st.sidebar.multiselect(
+                "Selecciona talleres:",
+                options=talleres_en_datos,
+                default=talleres_en_datos,
+                help="Filtra los datos por taller(es) específico(s)"
+            )
+        else:
+            filtros["talleres"] = talleres_en_datos
+    
+    # =========================================================================
+    # FILTROS EXISTENTES
+    # =========================================================================
     
     # Filtro de Año
     if 'AÑO' in df.columns:
@@ -136,12 +210,26 @@ def render_filtros(df):
 
 
 def aplicar_filtros(df, filtros):
-    """Aplicar filtros seleccionados al dataframe"""
+    """
+    Aplicar filtros seleccionados al dataframe.
+    Incluye soporte para filtro por taller.
+    """
     
     if df is None or df.empty:
         return df
     
     df_filtered = df.copy()
+    
+    # =========================================================================
+    # FILTRO POR TALLER
+    # =========================================================================
+    if filtros.get('talleres') and len(filtros['talleres']) > 0:
+        if 'TALLER_ORIGEN' in df_filtered.columns:
+            df_filtered = df_filtered[df_filtered['TALLER_ORIGEN'].isin(filtros['talleres'])]
+    
+    # =========================================================================
+    # FILTROS EXISTENTES
+    # =========================================================================
     
     # Filtro de año
     if filtros.get('año') and filtros['año'] != "Todos":
@@ -171,3 +259,37 @@ def aplicar_filtros(df, filtros):
         df_filtered = df_filtered[df_filtered['FECHA_INGR'].dt.date <= filtros['fecha_hasta']]
     
     return df_filtered
+
+
+# ============================================================================
+# RESUMEN DE TALLERES EN SIDEBAR
+# ============================================================================
+
+def render_resumen_talleres_sidebar(df):
+    """
+    Muestra un resumen rápido de los datos por taller en el sidebar.
+    """
+    if df is None or df.empty or "TALLER_ORIGEN" not in df.columns:
+        return
+    
+    st.sidebar.divider()
+    st.sidebar.header("📊 Resumen por Taller")
+    
+    resumen = df.groupby("TALLER_ORIGEN").agg({
+        "DIFERENCIA": "sum",
+        "PLACA": "count"
+    }).reset_index()
+    
+    for _, row in resumen.iterrows():
+        taller = row["TALLER_ORIGEN"]
+        ahorro = row["DIFERENCIA"]
+        cantidad = row["PLACA"]
+        
+        st.sidebar.markdown(f"""
+        <div style="margin-bottom: 0.5rem;">
+            <div style="font-size: 0.85rem; font-weight: 600;">{taller}</div>
+            <div style="font-size: 0.75rem; color: #64748B;">
+                💰 ${ahorro:,.0f} | 🚗 {cantidad} reparaciones
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
