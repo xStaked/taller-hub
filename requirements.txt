@@ -1,0 +1,22 @@
+# DISTRIKIA Dashboard - Dependencias
+
+# Core
+streamlit>=1.28.0
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Visualización
+plotly>=5.15.0
+
+# Google Sheets API
+gspread>=5.10.0
+google-auth>=2.22.0
+google-auth-oauthlib>=1.0.0
+google-auth-httplib2>=0.1.1
+
+# Exportación Excel
+openpyxl>=3.1.0
+xlsxwriter>=3.1.0
+
+# Utilidades
+python-dateutil>=2.8.0
