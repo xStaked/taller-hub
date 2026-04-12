@@ -25,6 +25,9 @@ from .taller_manager import (
     cargar_talleres,
 )
 
+from .fee_config import render_presentation_toggle
+from .chart_config import render_chart_type_selector
+
 
 # ============================================================================
 # CONFIGURACIÓN DEL SIDEBAR
@@ -85,23 +88,37 @@ def render_sidebar():
         st.session_state['sheet_url_manual'] = sheet_url
     
     st.sidebar.divider()
-    
+
+    # =========================================================================
+    # CONFIGURACIÓN DE HONORARIOS
+    # =========================================================================
+    presentation_mode = render_presentation_toggle()
+
+    st.sidebar.divider()
+
+    # =========================================================================
+    # CONFIGURACIÓN DE TIPOS DE GRÁFICOS
+    # =========================================================================
+    render_chart_type_selector()
+
+    st.sidebar.divider()
+
     # =========================================================================
     # AUTO-REFRESH
     # =========================================================================
     st.sidebar.header("⏱️ Actualización Automática")
     auto_refresh = st.sidebar.toggle("Auto-refresh activado", value=False)
-    
+
     if auto_refresh:
         refresh_interval = st.sidebar.slider("Intervalo (segundos)", 10, 300, 60, step=10)
         st.sidebar.caption(f"Última actualización: {datetime.now().strftime('%H:%M:%S')}")
-        
+
         # Trigger refresh
         time.sleep(refresh_interval)
         st.rerun()
-    
+
     st.sidebar.divider()
-    
+
     # Retornar talleres seleccionados y auto_refresh
     return talleres_seleccionados, auto_refresh
 
@@ -264,12 +281,12 @@ def render_filtros(df):
     if df is not None and 'FECHA_INGR' in df.columns:
         st.sidebar.divider()
         st.sidebar.subheader("📅 Rango de Fechas")
-        
+
         fechas_validas = df[df['FECHA_INGR'].notna()]['FECHA_INGR']
         if not fechas_validas.empty:
             min_date = fechas_validas.min().date()
             max_date = fechas_validas.max().date()
-            
+
             filtros['fecha_desde'] = st.sidebar.date_input("Desde", value=min_date, min_value=min_date, max_value=max_date)
             filtros['fecha_hasta'] = st.sidebar.date_input("Hasta", value=max_date, min_value=min_date, max_value=max_date)
     
@@ -325,7 +342,7 @@ def aplicar_filtros(df, filtros):
     # Filtro de fechas
     if filtros.get('fecha_desde') and 'FECHA_INGR' in df_filtered.columns:
         df_filtered = df_filtered[df_filtered['FECHA_INGR'].dt.date >= filtros['fecha_desde']]
-    
+
     if filtros.get('fecha_hasta') and 'FECHA_INGR' in df_filtered.columns:
         df_filtered = df_filtered[df_filtered['FECHA_INGR'].dt.date <= filtros['fecha_hasta']]
     

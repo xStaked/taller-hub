@@ -14,6 +14,7 @@ from plotly.subplots import make_subplots
 
 from .config import PORCENTAJE_HONORARIOS
 from .taller_config import get_color_taller, TALLERES_CONFIG
+from .fee_config import calculate_fee, load_fee_config, calculate_fees_for_df
 
 
 # ============================================================================
@@ -38,16 +39,29 @@ def render_kpis_multitaller(df):
         return
     
     st.subheader("🏪 Comparativa de Talleres")
-    
+
     # Calcular métricas por taller
     resumen = df.groupby("TALLER_ORIGEN").agg({
         "DIFERENCIA": ["sum", "mean", "count"],
         "PLACA": "nunique"
     }).reset_index()
-    
+
     resumen.columns = ["TALLER", "AHORRO_TOTAL", "AHORRO_PROMEDIO", "TOTAL_REPARACIONES", "VEHICULOS_UNICOS"]
-    resumen["HONORARIOS"] = resumen["AHORRO_TOTAL"] * PORCENTAJE_HONORARIOS
-    resumen["UTILIDAD"] = resumen["AHORRO_TOTAL"] - resumen["HONORARIOS"]
+    
+    # Apply per-taller fee calculation
+    fee_config = load_fee_config()
+    fee_info = calculate_fees_for_df(df, fee_config)
+    
+    # Update resumen with per-taller fees
+    for idx, row in resumen.iterrows():
+        taller = row["TALLER"]
+        if taller in fee_info['by_taller']:
+            resumen.loc[idx, "HONORARIOS"] = fee_info['by_taller'][taller]['fee_amount']
+            resumen.loc[idx, "UTILIDAD"] = row["AHORRO_TOTAL"] - fee_info['by_taller'][taller]['fee_amount']
+        else:
+            # Fallback to default calculation
+            resumen.loc[idx, "HONORARIOS"] = row["AHORRO_TOTAL"] * fee_config['global_defaults']['base_percentage']
+            resumen.loc[idx, "UTILIDAD"] = row["AHORRO_TOTAL"] - resumen.loc[idx, "HONORARIOS"]
     
     # Ordenar por ahorro total descendente
     resumen = resumen.sort_values("AHORRO_TOTAL", ascending=False)
@@ -363,7 +377,7 @@ def render_tabla_resumen_talleres(df):
         return
     
     st.subheader("📋 Resumen Detallado por Taller")
-    
+
     # Calcular métricas
     resumen = df.groupby("TALLER_ORIGEN").agg({
         "DIFERENCIA": ["sum", "mean", "count"],
@@ -371,31 +385,51 @@ def render_tabla_resumen_talleres(df):
         "M._DE_O._INICIAL": "sum",
         "M._DE_O._FINAL": "sum"
     }).reset_index()
-    
-    resumen.columns = ["TALLER", "AHORRO_TOTAL", "AHORRO_PROMEDIO", "REPARACIONES", 
+
+    resumen.columns = ["TALLER", "AHORRO_TOTAL", "AHORRO_PROMEDIO", "REPARACIONES",
                        "VEHICULOS", "MO_INICIAL", "MO_FINAL"]
+
+    # Calcular derivados con regla de umbral por taller
+    fee_config = load_fee_config()
+    hide_fees = fee_config.get('hide_fees_presentation', False)
     
-    # Calcular derivados
-    resumen["HONORARIOS"] = resumen["AHORRO_TOTAL"] * PORCENTAJE_HONORARIOS
-    resumen["UTILIDAD"] = resumen["AHORRO_TOTAL"] - resumen["HONORARIOS"]
+    # Use per-taller fee calculations
+    fee_info = calculate_fees_for_df(df, fee_config)
+    
+    # Update resumen with per-taller fees
+    for idx, row in resumen.iterrows():
+        taller = row["TALLER"]
+        if taller in fee_info['by_taller']:
+            resumen.loc[idx, "HONORARIOS"] = fee_info['by_taller'][taller]['fee_amount']
+            resumen.loc[idx, "UTILIDAD"] = row["AHORRO_TOTAL"] - fee_info['by_taller'][taller]['fee_amount']
+        else:
+            # Fallback
+            resumen.loc[idx, "HONORARIOS"] = row["AHORRO_TOTAL"] * fee_config['global_defaults']['base_percentage']
+            resumen.loc[idx, "UTILIDAD"] = row["AHORRO_TOTAL"] - resumen.loc[idx, "HONORARIOS"]
+    
     resumen["EFICIENCIA"] = ((resumen["MO_INICIAL"] - resumen["MO_FINAL"]) / resumen["MO_INICIAL"] * 100).round(1)
-    
+
     # Formatear para display
     display = resumen.copy()
     cols_moneda = ["AHORRO_TOTAL", "AHORRO_PROMEDIO", "MO_INICIAL", "MO_FINAL", "HONORARIOS", "UTILIDAD"]
     for col in cols_moneda:
         display[col] = display[col].apply(lambda x: f"${x:,.0f}")
-    
+
     display["EFICIENCIA"] = display["EFICIENCIA"].apply(lambda x: f"{x}%")
-    
+
     # Reordenar columnas
-    display = display[["TALLER", "REPARACIONES", "VEHICULOS", "AHORRO_TOTAL", 
-                       "AHORRO_PROMEDIO", "HONORARIOS", "UTILIDAD", "EFICIENCIA"]]
-    
-    # Renombrar columnas
-    display.columns = ["Taller", "Reparaciones", "Vehículos", "Ahorro Total", 
-                       "Promedio", "Honorarios", "Utilidad", "Eficiencia"]
-    
+    if hide_fees:
+        display = display[["TALLER", "REPARACIONES", "VEHICULOS", "AHORRO_TOTAL",
+                           "AHORRO_PROMEDIO", "UTILIDAD", "EFICIENCIA"]]
+        display.columns = ["Taller", "Reparaciones", "Vehículos", "Ahorro Total",
+                           "Promedio", "Utilidad", "Eficiencia"]
+        st.info("🔒 Modo presentación activo - Columnas de honorarios ocultas")
+    else:
+        display = display[["TALLER", "REPARACIONES", "VEHICULOS", "AHORRO_TOTAL",
+                           "AHORRO_PROMEDIO", "HONORARIOS", "UTILIDAD", "EFICIENCIA"]]
+        display.columns = ["Taller", "Reparaciones", "Vehículos", "Ahorro Total",
+                           "Promedio", "Honorarios", "Utilidad", "Eficiencia"]
+
     st.dataframe(display, width='stretch', hide_index=True)
     
     # Botón de exportación

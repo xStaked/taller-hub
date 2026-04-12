@@ -12,6 +12,8 @@ import streamlit as st
 from typing import Dict, List, Optional
 from datetime import datetime
 
+from .fee_config import update_taller_fee_config, load_fee_config
+
 # ============================================================================
 # CONFIGURACIÓN DE PERSISTENCIA
 # ============================================================================
@@ -338,27 +340,27 @@ def render_crud_talleres_sidebar():
         }
         </style>
         """, unsafe_allow_html=True)
-        
+
         with st.form("form_nuevo_taller"):
             st.markdown("**Nuevo Taller**")
-            
+
             nuevo_nombre = st.text_input(
                 "Nombre del Taller",
                 placeholder="Ej: Taller Norte",
                 max_chars=50,
                 key="new_nombre"
             )
-            
+
             nuevo_url = st.text_input(
                 "URL de Google Sheets",
                 placeholder="https://docs.google.com/spreadsheets/d/...",
                 help="Pega la URL completa del Google Sheet",
                 key="new_url"
             )
-            
+
             # Selector de color con nombres en español
             color_idx_default = len(talleres) % len(COLORES_PREDEFINIDOS)
-            
+
             nuevo_color = st.selectbox(
                 "Color del taller",
                 options=COLORES_PREDEFINIDOS,
@@ -366,8 +368,61 @@ def render_crud_talleres_sidebar():
                 format_func=lambda x: NOMBRES_COLORES.get(x, x)
             )
             
-            submitted = st.form_submit_button("💾 Guardar Taller", use_container_width=True)
+            # Configuración de honorarios
+            st.divider()
+            st.markdown("**💰 Configuración de Honorarios**")
             
+            # Load global defaults
+            fee_config = load_fee_config()
+            defaults = fee_config.get('global_defaults', {})
+            
+            col_fee1, col_fee2 = st.columns(2)
+            
+            with col_fee1:
+                fee_threshold = st.number_input(
+                    "💰 Umbral ($)",
+                    min_value=1000000,
+                    max_value=100000000,
+                    value=int(defaults.get('threshold', 15000000)),
+                    step=500000,
+                    format="%d",
+                    help="Si el ahorro supera este valor, se aplica tasa premium",
+                    key="new_fee_threshold"
+                )
+                
+                fee_base = st.number_input(
+                    "📊 Tasa Base (%)",
+                    min_value=1.0,
+                    max_value=50.0,
+                    value=defaults.get('base_percentage', 0.18) * 100,
+                    step=0.5,
+                    help="Porcentaje cuando el ahorro está por debajo del umbral",
+                    key="new_fee_base"
+                )
+            
+            with col_fee2:
+                fee_premium = st.number_input(
+                    "🚀 Tasa Premium (%)",
+                    min_value=1.0,
+                    max_value=50.0,
+                    value=defaults.get('premium_percentage', 0.20) * 100,
+                    step=0.5,
+                    help="Porcentaje cuando el ahorro supera el umbral",
+                    key="new_fee_premium"
+                )
+                
+                # Preview
+                st.markdown(f"""
+                <div style="background: #1E293B; padding: 0.5rem; border-radius: 6px; margin-top: 1.5rem;">
+                <p style="color: #94A3B8; margin: 0; font-size: 0.75rem;">
+                💡 > ${fee_threshold:,.0f} → {fee_premium:.0f}%<br>
+                📌 ≤ ${fee_threshold:,.0f} → {fee_base:.0f}%
+                </p>
+                </div>
+                """, unsafe_allow_html=True)
+
+            submitted = st.form_submit_button("💾 Guardar Taller", use_container_width=True)
+
             if submitted:
                 if not nuevo_nombre.strip():
                     st.error("⚠️ El nombre es obligatorio")
@@ -378,6 +433,13 @@ def render_crud_talleres_sidebar():
                 else:
                     taller_id = crear_taller(nuevo_nombre, nuevo_url, nuevo_color)
                     if taller_id:
+                        # Save fee configuration for this taller
+                        update_taller_fee_config(
+                            taller_id,
+                            fee_threshold,
+                            fee_base / 100,
+                            fee_premium / 100
+                        )
                         st.success(f"✅ Taller creado!")
                         st.rerun()
                     else:
@@ -396,7 +458,7 @@ def render_crud_talleres_sidebar():
             }
             </style>
             """, unsafe_allow_html=True)
-            
+
             # Selector de taller a editar
             taller_options = {f"{v['nombre']} ({k})": k for k, v in talleres.items()}
             taller_seleccionado = st.selectbox(
@@ -404,38 +466,42 @@ def render_crud_talleres_sidebar():
                 options=list(taller_options.keys()),
                 key="edit_select"
             )
-            
+
             if taller_seleccionado:
                 taller_id = taller_options[taller_seleccionado]
                 config = talleres[taller_id]
                 
+                # Load fee config for this taller
+                from .fee_config import get_taller_fee_config
+                fee_config_taller = get_taller_fee_config(taller_id)
+
                 with st.form("form_editar_taller"):
                     edit_nombre = st.text_input(
                         "Nombre",
                         value=config["nombre"]
                     )
-                    
+
                     edit_url = st.text_input(
                         "URL",
                         value=config["sheet_url"]
                     )
-                    
+
                     # Estado activo/inactivo
                     edit_activo = st.toggle(
                         "Taller activo",
                         value=config.get("activo", True)
                     )
-                    
+
                     # Color actual
                     colores_con_seleccion = COLORES_PREDEFINIDOS.copy()
                     if config["color"] not in colores_con_seleccion:
                         colores_con_seleccion.insert(0, config["color"])
-                    
+
                     try:
                         color_idx = colores_con_seleccion.index(config["color"])
                     except ValueError:
                         color_idx = 0
-                    
+
                     # Selector de color con nombres en español
                     edit_color = st.selectbox(
                         "Color",
@@ -444,8 +510,57 @@ def render_crud_talleres_sidebar():
                         format_func=lambda x: NOMBRES_COLORES.get(x, x)
                     )
                     
-                    submitted = st.form_submit_button("💾 Actualizar", use_container_width=True)
+                    # Configuración de honorarios
+                    st.divider()
+                    st.markdown("**💰 Configuración de Honorarios**")
                     
+                    col_fee1, col_fee2 = st.columns(2)
+                    
+                    with col_fee1:
+                        edit_fee_threshold = st.number_input(
+                            "💰 Umbral ($)",
+                            min_value=1000000,
+                            max_value=100000000,
+                            value=int(fee_config_taller.get('threshold', 15000000)),
+                            step=500000,
+                            format="%d",
+                            help="Si el ahorro supera este valor, se aplica tasa premium",
+                            key=f"edit_fee_threshold_{taller_id}"
+                        )
+                        
+                        edit_fee_base = st.number_input(
+                            "📊 Tasa Base (%)",
+                            min_value=1.0,
+                            max_value=50.0,
+                            value=fee_config_taller.get('base_percentage', 0.18) * 100,
+                            step=0.5,
+                            help="Porcentaje cuando el ahorro está por debajo del umbral",
+                            key=f"edit_fee_base_{taller_id}"
+                        )
+                    
+                    with col_fee2:
+                        edit_fee_premium = st.number_input(
+                            "🚀 Tasa Premium (%)",
+                            min_value=1.0,
+                            max_value=50.0,
+                            value=fee_config_taller.get('premium_percentage', 0.20) * 100,
+                            step=0.5,
+                            help="Porcentaje cuando el ahorro supera el umbral",
+                            key=f"edit_fee_premium_{taller_id}"
+                        )
+                        
+                        # Preview
+                        st.markdown(f"""
+                        <div style="background: #1E293B; padding: 0.5rem; border-radius: 6px; margin-top: 1.5rem;">
+                        <p style="color: #94A3B8; margin: 0; font-size: 0.75rem;">
+                        💡 > ${edit_fee_threshold:,.0f} → {edit_fee_premium:.0f}%<br>
+                        📌 ≤ ${edit_fee_threshold:,.0f} → {edit_fee_base:.0f}%
+                        </p>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    submitted = st.form_submit_button("💾 Actualizar", use_container_width=True)
+
                     if submitted:
                         if actualizar_taller(
                             taller_id,
@@ -454,6 +569,13 @@ def render_crud_talleres_sidebar():
                             color=edit_color,
                             activo=edit_activo
                         ):
+                            # Update fee configuration
+                            update_taller_fee_config(
+                                taller_id,
+                                edit_fee_threshold,
+                                edit_fee_base / 100,
+                                edit_fee_premium / 100
+                            )
                             st.success("✅ Actualizado!")
                             st.rerun()
                         else:

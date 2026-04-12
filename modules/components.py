@@ -11,11 +11,17 @@ from datetime import datetime
 
 def render_header():
     """Renderiza el header principal del dashboard"""
-    st.markdown('<div class="main-header">🚗 DISTRIKIA</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="sub-header">Sistema de Gestión de Ahorros y Análisis de Talleres Automotrices</div>',
-        unsafe_allow_html=True
-    )
+    col_logo, col_title = st.columns([1, 5])
+
+    with col_logo:
+        st.image("logo.png", width=100)
+
+    with col_title:
+        st.markdown('<div class="main-header">🚗 DISTRIKIA</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="sub-header">Sistema de Gestión de Ahorros y Análisis de Talleres Automotrices</div>',
+            unsafe_allow_html=True
+        )
 
 
 def render_footer():
@@ -118,13 +124,22 @@ def render_data_info(df, df_filtered):
 
 def render_export_section(df_filtered, filtros):
     """Sección de exportación de datos"""
-    from .exporters import generate_excel_report, generate_csv_export
-    
+    from .exporters import generate_excel_report, generate_csv_export, generate_pdf_report
+    from .fee_config import load_fee_config
+
     st.divider()
     st.header("📥 Exportación de Datos")
-    
+
+    # Toggle para incluir honorarios en PDF
+    fee_config = load_fee_config()
+    include_honorarios = st.toggle(
+        "📊 Incluir honorarios en el reporte PDF",
+        value=not fee_config.get('hide_fees_presentation', False),
+        help="Activa/desactiva la inclusión de datos de honorarios en el PDF exportado"
+    )
+
     col_exp1, col_exp2, col_exp3 = st.columns(3)
-    
+
     # Exportar Excel
     with col_exp1:
         excel_buffer = generate_excel_report(df_filtered, filtros)
@@ -135,7 +150,7 @@ def render_export_section(df_filtered, filtros):
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             width='stretch'
         )
-    
+
     # Exportar CSV
     with col_exp2:
         csv_data = generate_csv_export(df_filtered)
@@ -146,11 +161,18 @@ def render_export_section(df_filtered, filtros):
             mime="text/csv",
             width='stretch'
         )
-    
-    # Generar PDF (placeholder)
+
+    # Generar PDF
     with col_exp3:
-        if st.button("📑 Generar Reporte PDF", width='stretch'):
-            st.info("💡 Para PDF: Usa la función 'Imprimir a PDF' de tu navegador (Ctrl+P)")
+        pdf_buffer = generate_pdf_report(df_filtered, filtros, include_honorarios=include_honorarios)
+        honorarios_text = "con" if include_honorarios else "sin"
+        st.download_button(
+            label=f"📑 Descargar PDF ({honorarios_text} honorarios)",
+            data=pdf_buffer,
+            file_name=f"distrikia_dashboard_{honorarios_text}_honorarios_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
+            mime="application/pdf",
+            width='stretch'
+        )
 
 
 def render_error_state(error):
