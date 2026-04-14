@@ -154,6 +154,92 @@ def render_ranking_talleres(df):
 # GRÁFICOS COMPARATIVOS MULTITALLER
 # ============================================================================
 
+def render_comparativo_anual(df):
+    """
+    Gráfico comparativo año vs año: muestra ahorro mensual agrupado por año.
+    Una línea/barra por año. Eje X: meses (1-12), Eje Y: ahorro (DIFERENCIA).
+    Soporta filtro de trimestre y tanto modo single-taller como multitaller.
+    """
+    if df is None or df.empty:
+        return
+
+    if "AÑO" not in df.columns or "MES" not in df.columns or "DIFERENCIA" not in df.columns:
+        return
+
+    # Filtrar datos válidos
+    df_valid = df[
+        (df['AÑO'].notna()) & (df['MES'].notna()) &
+        (df['AÑO'] > 2000) & (df['MES'] >= 1) & (df['MES'] <= 12)
+    ]
+
+    if df_valid.empty:
+        return
+
+    # Verificar que haya más de 1 año en los datos
+    años_unicos = sorted(df_valid['AÑO'].unique())
+    if len(años_unicos) <= 1:
+        return
+
+    # Agrupar por año y mes
+    df_grupo = df_valid.groupby(["AÑO", "MES"]).agg({
+        "DIFERENCIA": "sum"
+    }).reset_index()
+
+    # Nombres de meses para el eje X
+    month_names = {
+        1: "Ene", 2: "Feb", 3: "Mar", 4: "Abr", 5: "May", 6: "Jun",
+        7: "Jul", 8: "Ago", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dic"
+    }
+
+    # Obtener los meses presentes en los datos (para respetar filtro de trimestre)
+    meses_presentes = sorted(df_valid['MES'].unique())
+
+    # Crear gráfico
+    fig = go.Figure()
+
+    # Colores para cada año (usar paleta de Plotly)
+    colors = px.colors.qualitative.Plotly
+
+    for i, año in enumerate(años_unicos):
+        color = colors[i % len(colors)]
+        df_año = df_grupo[df_grupo["AÑO"] == año]
+
+        # Preparar datos para el gráfico
+        x_meses = []
+        y_valores = []
+
+        for mes in meses_presentes:
+            row = df_año[df_año["MES"] == mes]
+            if not row.empty:
+                x_meses.append(month_names.get(mes, str(mes)))
+                y_valores.append(row["DIFERENCIA"].values[0])
+            else:
+                # Mes sin datos
+                x_meses.append(month_names.get(mes, str(mes)))
+                y_valores.append(0)
+
+        fig.add_trace(go.Bar(
+            x=x_meses,
+            y=y_valores,
+            name=str(int(año)),
+            marker_color=color,
+            hovertemplate=f"<b>Año {int(año)}</b><br>Mes: %{{x}}<br>Ahorro: $%{{y:,.0f}}<extra></extra>"
+        ))
+
+    fig.update_layout(
+        title="📅 Comparativo Anual: Ahorro Mensual por Año",
+        xaxis_title="Mes",
+        yaxis_title="Ahorro ($)",
+        height=450,
+        barmode="group",
+        hovermode="x unified",
+        legend=dict(title="Año", orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        yaxis_tickformat="$,.0f"
+    )
+
+    st.plotly_chart(fig, width='stretch')
+
+
 def render_grafico_comparativo_ahorro(df):
     """
     Gráfico de barras comparando ahorro por taller.

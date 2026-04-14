@@ -19,7 +19,6 @@ from modules.data_loader import (
     get_estadisticas_carga,
     render_resumen_carga
 )
-from modules.data_processor import get_debug_logs
 
 # Importar validaciones
 from modules.validators import run_validations
@@ -32,7 +31,8 @@ from modules.visualizations import (
     render_grafico_tasa_imprevistos,
     render_grafico_cambio_repuestos,
     render_tabla_detalle,
-    render_recuperacion_mensual
+    render_recuperacion_mensual,
+    render_efectividad_valoracion
 )
 
 # Importar visualizaciones de imprevistos
@@ -45,7 +45,8 @@ from modules.imprevistos_visualizations import (
 from modules.visualizations_multitaller import (
     render_kpis_multitaller,
     render_ranking_talleres,
-    render_vista_multitaller
+    render_vista_multitaller,
+    render_comparativo_anual
 )
 
 # Importar sidebar y filtros
@@ -60,7 +61,6 @@ from modules.sidebar import (
 from modules.components import (
     render_header,
     render_footer,
-    render_debug_panel,
     render_alerts,
     render_data_info,
     render_export_section,
@@ -139,11 +139,6 @@ def main():
     # Mostrar resumen de carga en sidebar
     stats = get_estadisticas_carga(errores, len(talleres_seleccionados))
     render_resumen_carga(stats)
-    
-    # =========================================================================
-    # PANEL DE DEBUG
-    # =========================================================================
-    render_debug_panel(df, None, get_debug_logs())
     
     # =========================================================================
     # MANEJO DE ERRORES
@@ -235,9 +230,21 @@ def main():
     # =========================================================================
     st.subheader("📊 Métricas Consolidadas" if es_multitaller else "📊 Métricas Principales")
     render_kpis(df_filtered)
-    
+
     st.divider()
-    
+
+    # =========================================================================
+    # SECCIÓN: COMPARATIVO ANUAL (Año vs Año)
+    # =========================================================================
+    # Solo mostrar si hay datos de más de 1 año en el DataFrame filtrado
+    if df_filtered is not None and not df_filtered.empty and 'AÑO' in df_filtered.columns:
+        años_unicos = df_filtered['AÑO'].dropna().unique()
+        if len(años_unicos) > 1:
+            st.subheader("📅 Comparativo Anual")
+            render_comparativo_anual(df_filtered)
+
+            st.divider()
+
     # =========================================================================
     # SECCIÓN: GRÁFICOS
     # =========================================================================
@@ -266,6 +273,13 @@ def main():
     # SECCIÓN: RECUPERACIÓN MENSUAL
     # =========================================================================
     render_recuperacion_mensual(df_filtered)
+
+    st.divider()
+
+    # =========================================================================
+    # SECCIÓN: EFECTIVIDAD EN LA VALORACIÓN
+    # =========================================================================
+    render_efectividad_valoracion(df_filtered)
 
     st.divider()
 

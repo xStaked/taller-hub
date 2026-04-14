@@ -261,7 +261,14 @@ def render_filtros(df):
         años = sorted(df['AÑO'].dropna().unique(), reverse=True)
         años_options = ["Todos"] + [str(int(a)) for a in años if a > 0]
         filtros['año'] = st.sidebar.selectbox("📅 Año", años_options)
-    
+
+    # Filtro de Trimestre (Q1/Q2/Q3/Q4/Todos)
+    filtros['trimestre'] = st.sidebar.selectbox(
+        "📊 Trimestre",
+        options=["Todos", "Q1", "Q2", "Q3", "Q4"],
+        help="Q1: Ene-Mar | Q2: Abr-Jun | Q3: Jul-Sep | Q4: Oct-Dic"
+    )
+
     # Filtro de Mes
     if df is not None and 'MES' in df.columns:
         meses = sorted(df['MES'].dropna().unique())
@@ -344,7 +351,22 @@ def aplicar_filtros(df, filtros):
     # Filtro de año
     if filtros.get('año') and filtros['año'] != "Todos":
         df_filtered = df_filtered[df_filtered['AÑO'] == int(filtros['año'])]
-    
+
+    # Filtro de trimestre
+    # Mapeo: Q1=meses 1-3, Q2=4-6, Q3=7-9, Q4=10-12
+    trimestre_map = {
+        "Q1": (1, 3),
+        "Q2": (4, 6),
+        "Q3": (7, 9),
+        "Q4": (10, 12)
+    }
+    if filtros.get('trimestre') and filtros['trimestre'] != "Todos":
+        mes_inicio, mes_fin = trimestre_map[filtros['trimestre']]
+        if 'MES' in df_filtered.columns:
+            df_filtered = df_filtered[
+                (df_filtered['MES'] >= mes_inicio) & (df_filtered['MES'] <= mes_fin)
+            ]
+
     # Filtro de mes
     if filtros.get('mes') and filtros['mes'] != "Todos":
         df_filtered = df_filtered[df_filtered['MES'] == int(filtros['mes'])]

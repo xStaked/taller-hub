@@ -30,7 +30,8 @@ CHART_IDS = {
     "ahorro_mes": "Ahorro por Mes",
     "causales": "Causales de Cambio",
     "tasa_imprevistos": "Tasa de Imprevistos",
-    "cambio_repuestos": "Cambio de Repuestos"
+    "cambio_repuestos": "Cambio de Repuestos",
+    "recuperacion_mensual": "Recuperación Mensual"
 }
 
 DEFAULT_CHART_CONFIG = {

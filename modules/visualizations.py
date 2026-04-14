@@ -16,6 +16,7 @@ from .config import PORCENTAJE_HONORARIOS
 from .data_processor import add_log
 from .fee_config import calculate_fee, load_fee_config, calculate_fees_for_df
 from .chart_config import get_chart_type_for_id, CHART_TYPE_BAR, CHART_TYPE_LINE
+from .imprevistos_processor import extraer_imprevistos_from_dataframe
 
 
 # ============================================================================
@@ -610,6 +611,48 @@ def render_recuperacion_mensual(df):
 
     resumen_display['PERIODO'] = resumen_display.apply(lambda x: f"{x['MES']:02d}/{x['AÑO']}", axis=1)
 
+    # Build period labels for chart
+    resumen = resumen.copy()
+    resumen['PERIODO'] = resumen['MES'].astype(int).astype(str).str.zfill(2) + '/' + resumen['AÑO'].astype(int).astype(str)
+
+    # Render chart for monthly recovery
+    chart_type = get_chart_type_for_id('recuperacion_mensual')
+
+    fig = go.Figure()
+
+    if chart_type == CHART_TYPE_BAR:
+        fig.add_trace(go.Bar(
+            x=resumen['PERIODO'],
+            y=resumen['RECUPERACION'],
+            name='Recuperación',
+            marker_color='#0066CC',
+            marker_line_width=0
+        ))
+    else:
+        fig.add_trace(go.Scatter(
+            x=resumen['PERIODO'],
+            y=resumen['RECUPERACION'],
+            mode='lines+markers',
+            name='Recuperación',
+            line=dict(color='#0066CC', width=3),
+            marker=dict(size=8, color='#00A8E8', line=dict(width=2, color='white')),
+            fill='tozeroy',
+            fillcolor='rgba(0, 102, 204, 0.1)'
+        ))
+
+    fig.update_layout(
+        title='📊 Evolución de Recuperación Mensual',
+        xaxis_title='Mes',
+        yaxis_title='Recuperación ($)',
+        height=400,
+        hovermode='x unified',
+        showlegend=False
+    )
+
+    fig.update_yaxes(tickformat='$,.0f')
+
+    st.plotly_chart(fig, width='stretch')
+
     # Hide fees in presentation mode
     if hide_fees:
         st.dataframe(
@@ -632,3 +675,144 @@ def render_recuperacion_mensual(df):
             hide_index=True,
             height=400
         )
+
+
+# ============================================================================
+# EFECTIVIDAD EN LA VALORACION
+# ============================================================================
+
+def render_efectividad_valoracion(df):
+    """
+    Muestra la eficiencia mensual de valoración:
+    (1 - vehículos con imprevistos / total vehículos cotizados) * 100
+    """
+    st.subheader("📐 Efectividad en la Valoración")
+
+    required_cols = {'AÑO', 'MES', 'PLACA'}
+    if df is None or df.empty:
+        st.warning("No hay datos disponibles para calcular la efectividad de valoración.")
+        return
+
+    if not required_cols.issubset(df.columns):
+        st.warning("Faltan columnas requeridas (AÑO, MES, PLACA) para calcular la efectividad.")
+        return
+
+    df_valid = df.copy()
+    df_valid['AÑO'] = pd.to_numeric(df_valid['AÑO'], errors='coerce')
+    df_valid['MES'] = pd.to_numeric(df_valid['MES'], errors='coerce')
+    df_valid['PLACA_NORMALIZADA'] = df_valid['PLACA'].astype(str).str.upper().str.strip()
+
+    df_valid = df_valid[
+        df_valid['AÑO'].notna() &
+        df_valid['MES'].notna() &
+        (df_valid['AÑO'] > 2000) &
+        (df_valid['MES'] >= 1) &
+        (df_valid['MES'] <= 12) &
+        df_valid['PLACA_NORMALIZADA'].ne('') &
+        df_valid['PLACA_NORMALIZADA'].ne('NAN')
+    ].copy()
+
+    if df_valid.empty:
+        st.warning("No hay datos válidos de fecha y placa para calcular la efectividad.")
+        return
+
+    df_valid['AÑO'] = df_valid['AÑO'].astype(int)
+    df_valid['MES'] = df_valid['MES'].astype(int)
+
+    total_vehiculos = (
+        df_valid.groupby(['AÑO', 'MES'])['PLACA_NORMALIZADA']
+        .nunique()
+        .reset_index(name='Cantidad vehículos revisados')
+    )
+
+    df_imprevistos = extraer_imprevistos_from_dataframe(df_valid)
+
+    if not df_imprevistos.empty and {'año', 'mes', 'placa'}.issubset(df_imprevistos.columns):
+        df_imprevistos = df_imprevistos.copy()
+        df_imprevistos['año'] = pd.to_numeric(df_imprevistos['año'], errors='coerce')
+        df_imprevistos['mes'] = pd.to_numeric(df_imprevistos['mes'], errors='coerce')
+        df_imprevistos['placa'] = df_imprevistos['placa'].astype(str).str.upper().str.strip()
+        df_imprevistos = df_imprevistos[
+            df_imprevistos['año'].notna() &
+            df_imprevistos['mes'].notna() &
+            df_imprevistos['placa'].ne('') &
+            df_imprevistos['placa'].ne('NAN')
+        ].copy()
+
+        imprevistos_por_mes = (
+            df_imprevistos.groupby(['año', 'mes'])['placa']
+            .nunique()
+            .reset_index(name='Vehículos con imprevistos')
+            .rename(columns={'año': 'AÑO', 'mes': 'MES'})
+        )
+    else:
+        imprevistos_por_mes = pd.DataFrame(columns=['AÑO', 'MES', 'Vehículos con imprevistos'])
+
+    resumen = total_vehiculos.merge(imprevistos_por_mes, on=['AÑO', 'MES'], how='left')
+    resumen['Vehículos con imprevistos'] = resumen['Vehículos con imprevistos'].fillna(0).astype(int)
+    resumen['Eficiencia (%)'] = (
+        1 - (resumen['Vehículos con imprevistos'] / resumen['Cantidad vehículos revisados'])
+    ) * 100
+    resumen['Eficiencia (%)'] = resumen['Eficiencia (%)'].clip(lower=0, upper=100).round(1)
+
+    resumen['FECHA'] = pd.to_datetime(
+        resumen['AÑO'].astype(str) + '-' + resumen['MES'].astype(str) + '-01',
+        format='%Y-%m-%d',
+        errors='coerce'
+    )
+    resumen = resumen[resumen['FECHA'].notna()].sort_values('FECHA').reset_index(drop=True)
+
+    if resumen.empty:
+        st.warning("No se pudo construir la serie mensual de efectividad.")
+        return
+
+    resumen['Mes'] = resumen['FECHA'].dt.strftime('%b %Y')
+
+    eficiencia_promedio = resumen['Eficiencia (%)'].mean()
+    mejor_mes = resumen.loc[resumen['Eficiencia (%)'].idxmax()]
+    peor_mes = resumen.loc[resumen['Eficiencia (%)'].idxmin()]
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Eficiencia promedio", f"{eficiencia_promedio:.1f}%")
+    with col2:
+        st.metric("Mejor mes", mejor_mes['Mes'], f"{mejor_mes['Eficiencia (%)']:.1f}%")
+    with col3:
+        st.metric("Peor mes", peor_mes['Mes'], f"{peor_mes['Eficiencia (%)']:.1f}%", delta_color="inverse")
+
+    tabla_resumen = resumen[[
+        'Mes',
+        'Cantidad vehículos revisados',
+        'Vehículos con imprevistos',
+        'Eficiencia (%)'
+    ]].copy()
+    tabla_resumen['Eficiencia (%)'] = tabla_resumen['Eficiencia (%)'].map(lambda x: f"{x:.1f}%")
+
+    st.dataframe(
+        tabla_resumen,
+        width='stretch',
+        hide_index=True,
+        height=350
+    )
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=resumen['Mes'],
+        y=resumen['Eficiencia (%)'],
+        mode='lines+markers',
+        name='Eficiencia',
+        line=dict(color='#0066CC', width=3),
+        marker=dict(size=8, color='#00A8E8', line=dict(width=2, color='white'))
+    ))
+
+    fig.update_layout(
+        title='📈 Eficiencia Mensual en la Valoración',
+        xaxis_title='Mes',
+        yaxis_title='Eficiencia (%)',
+        height=400,
+        hovermode='x unified',
+        showlegend=False
+    )
+    fig.update_yaxes(range=[0, 100], ticksuffix='%')
+
+    st.plotly_chart(fig, width='stretch')
