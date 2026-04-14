@@ -104,6 +104,28 @@ def render_sidebar():
     st.sidebar.divider()
 
     # =========================================================================
+    # ACCESO RÁPIDO: MÓDULO DE IMPREVISTOS
+    # =========================================================================
+    st.sidebar.header("⚠️ Imprevistos")
+    
+    if st.sidebar.button(
+        "📊 Registrar Imprevistos",
+        use_container_width=True,
+        type="primary",
+        key="sidebar_imprevistos_btn"
+    ):
+        st.session_state['mostrar_imprevistos'] = True
+    
+    if st.sidebar.button(
+        "📋 Ver Resumen de Imprevistos",
+        use_container_width=True,
+        key="sidebar_imprevistos_resumen_btn"
+    ):
+        st.session_state['mostrar_imprevistos_resumen'] = True
+    
+    st.sidebar.divider()
+
+    # =========================================================================
     # AUTO-REFRESH
     # =========================================================================
     st.sidebar.header("⏱️ Actualización Automática")

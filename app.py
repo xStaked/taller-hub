@@ -35,6 +35,12 @@ from modules.visualizations import (
     render_recuperacion_mensual
 )
 
+# Importar visualizaciones de imprevistos
+from modules.imprevistos_visualizations import (
+    render_imprevistos_visualizations,
+    render_grafico_tasa_imprevistos_nuevo
+)
+
 # Importar visualizaciones multitaller
 from modules.visualizations_multitaller import (
     render_kpis_multitaller,
@@ -260,7 +266,46 @@ def main():
     # SECCIÓN: RECUPERACIÓN MENSUAL
     # =========================================================================
     render_recuperacion_mensual(df_filtered)
+
+    st.divider()
+
+    # =========================================================================
+    # SECCIÓN: TASA DE IMPREVISTOS (NUEVO)
+    # =========================================================================
     
+    # Check if we should show imprevistos module from sidebar buttons
+    mostrar_imprevistos = st.session_state.get('mostrar_imprevistos', False)
+    mostrar_imprevistos_resumen = st.session_state.get('mostrar_imprevistos_resumen', False)
+    
+    if mostrar_imprevistos or mostrar_imprevistos_resumen:
+        st.subheader("⚠️ Módulo de Tasa de Imprevistos")
+        
+        if mostrar_imprevistos:
+            # Show full data entry form
+            from modules.imprevistos_data import render_imprevistos_data_entry
+            render_imprevistos_data_entry()
+        
+        if mostrar_imprevistos_resumen:
+            # Show just the summary table
+            from modules.imprevistos_data import render_resumen_mensual_table
+            render_resumen_mensual_table()
+        
+        # Button to close the imprevistos module
+        if st.button("✖ Cerrar Módulo de Imprevistos"):
+            st.session_state['mostrar_imprevistos'] = False
+            st.session_state['mostrar_imprevistos_resumen'] = False
+            st.rerun()
+        
+        st.divider()
+    
+    # Always show the chart section
+    with st.expander("📊 Ver Gráfico de Tasa de Imprevistos", expanded=True):
+        render_grafico_tasa_imprevistos_nuevo(
+            df=df_filtered,
+            taller_id=None,
+            año=None
+        )
+
     st.divider()
     
     # =========================================================================
