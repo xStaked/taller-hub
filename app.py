@@ -38,7 +38,8 @@ from modules.visualizations import (
 # Importar visualizaciones de imprevistos
 from modules.imprevistos_visualizations import (
     render_imprevistos_visualizations,
-    render_grafico_tasa_imprevistos_nuevo
+    render_grafico_tasa_imprevistos_nuevo,
+    render_grafico_culpa_taller_mensual,
 )
 
 # Importar visualizaciones multitaller
@@ -319,6 +320,14 @@ def main():
             taller_id=None,
             año=None
         )
+
+    st.divider()
+
+    # =========================================================================
+    # SECCIÓN: TASA DE IMPREVISTOS - CULPA DEL TALLER (CAMBIO DE REPUESTO)
+    # =========================================================================
+    with st.expander("🔧 Culpa del Taller: Imprevistos con Cambio de Repuesto", expanded=True):
+        render_grafico_culpa_taller_mensual(df=df_filtered)
 
     st.divider()
     

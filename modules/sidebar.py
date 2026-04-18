@@ -306,19 +306,6 @@ def render_filtros(df):
             default=[]
         )
     
-    # Filtro de rango de fechas
-    if df is not None and 'FECHA_INGR' in df.columns:
-        st.sidebar.divider()
-        st.sidebar.subheader("📅 Rango de Fechas")
-
-        fechas_validas = df[df['FECHA_INGR'].notna()]['FECHA_INGR']
-        if not fechas_validas.empty:
-            min_date = fechas_validas.min().date()
-            max_date = fechas_validas.max().date()
-
-            filtros['fecha_desde'] = st.sidebar.date_input("Desde", value=min_date, min_value=min_date, max_value=max_date)
-            filtros['fecha_hasta'] = st.sidebar.date_input("Hasta", value=max_date, min_value=min_date, max_value=max_date)
-    
     # Botón de limpiar filtros
     if st.sidebar.button("🧹 Limpiar Filtros", type="secondary"):
         st.rerun()
@@ -382,13 +369,6 @@ def aplicar_filtros(df, filtros):
     # Filtro de acción
     if filtros.get('accion') and len(filtros['accion']) > 0:
         df_filtered = df_filtered[df_filtered['ACCION'].isin(filtros['accion'])]
-    
-    # Filtro de fechas
-    if filtros.get('fecha_desde') and 'FECHA_INGR' in df_filtered.columns:
-        df_filtered = df_filtered[df_filtered['FECHA_INGR'].dt.date >= filtros['fecha_desde']]
-
-    if filtros.get('fecha_hasta') and 'FECHA_INGR' in df_filtered.columns:
-        df_filtered = df_filtered[df_filtered['FECHA_INGR'].dt.date <= filtros['fecha_hasta']]
     
     return df_filtered
 

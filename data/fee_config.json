@@ -1,0 +1,15 @@
+{
+  "global_defaults": {
+    "threshold": 15000000,
+    "base_percentage": 0.18,
+    "premium_percentage": 0.2
+  },
+  "talleres": {
+    "taller_20260416182234": {
+      "threshold": 15000000,
+      "base_percentage": 0.18,
+      "premium_percentage": 0.2
+    }
+  },
+  "hide_fees_presentation": false
+}

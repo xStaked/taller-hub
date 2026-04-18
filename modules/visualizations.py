@@ -739,6 +739,9 @@ def render_efectividad_valoracion(df):
             df_imprevistos['placa'].ne('NAN')
         ].copy()
 
+        df_imprevistos['año'] = df_imprevistos['año'].astype(int)
+        df_imprevistos['mes'] = df_imprevistos['mes'].astype(int)
+
         imprevistos_por_mes = (
             df_imprevistos.groupby(['año', 'mes'])['placa']
             .nunique()

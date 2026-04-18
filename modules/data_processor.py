@@ -87,41 +87,52 @@ def procesar_dataframe(df, fuente="Google Sheets"):
     date_cols = ['FECHA_INGR', 'FECHA_AUTO']
     for col in date_cols:
         if col in df.columns:
-            df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=False)
+            df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
             add_log(f"Columna fecha procesada: {col}")
     
-    # Extraer AÑO y MES si no existen
+    # AÑO y MES: las columnas directas son la fuente primaria.
+    # Solo derivar de FECHA_INGR si no existen o están vacías.
     if 'AÑO' not in df.columns or df['AÑO'].isna().all():
         if 'FECHA_INGR' in df.columns:
             df['AÑO'] = df['FECHA_INGR'].dt.year
             df['MES'] = df['FECHA_INGR'].dt.month
-            add_log("AÑO y MES extraídos de FECHA_INGR")
-    
+            add_log("AÑO y MES extraídos de FECHA_INGR (fallback)")
+        else:
+            add_log("AÑO y MES no encontrados")
+    else:
+        add_log("AÑO y MES usados desde columnas directas (DIA/MES/AÑO)")
+
     # Asegurar que AÑO y MES sean numéricos (mantener NaN en lugar de 0 para fechas inválidas)
     if 'AÑO' in df.columns:
         df['AÑO'] = pd.to_numeric(df['AÑO'], errors='coerce')
     if 'MES' in df.columns:
         df['MES'] = pd.to_numeric(df['MES'], errors='coerce')
-    
+
     # Calcular DIFERENCIA si no existe o es cero
     if 'DIFERENCIA' not in df.columns or df['DIFERENCIA'].sum() == 0:
         if 'M._DE_O._INICIAL' in df.columns and 'M._DE_O._FINAL' in df.columns:
             df['DIFERENCIA'] = df['M._DE_O._FINAL'] - df['M._DE_O._INICIAL']
             add_log("DIFERENCIA calculada de INICIAL/FINAL")
-    
+
     add_log(f"render_kpis: DIFERENCIA existe={('DIFERENCIA' in df.columns)}, suma={df.get('DIFERENCIA', pd.Series([0])).sum()}")
-    
-    # Crear campo de fecha completo para gráficos
-    if 'FECHA_INGR' in df.columns:
+
+    # FECHA_COMPLETA: priorizar AÑO/MES/DIA sobre FECHA_INGR
+    if all(col in df.columns for col in ['AÑO', 'MES', 'DIA']):
+        df['FECHA_COMPLETA'] = pd.to_datetime(
+            df[['AÑO', 'MES', 'DIA']].rename(columns={'AÑO': 'year', 'MES': 'month', 'DIA': 'day'}),
+            errors='coerce'
+        )
+        add_log("FECHA_COMPLETA construida desde AÑO/MES/DIA")
+    elif all(col in df.columns for col in ['AÑO', 'MES']):
+        df['FECHA_COMPLETA'] = pd.to_datetime(
+            df[['AÑO', 'MES']].assign(day=1).rename(columns={'AÑO': 'year', 'MES': 'month'}),
+            errors='coerce'
+        )
+        add_log("FECHA_COMPLETA construida desde AÑO/MES (sin DIA)")
+    elif 'FECHA_INGR' in df.columns:
         df['FECHA_COMPLETA'] = df['FECHA_INGR']
-    else:
-        # Construir fecha desde AÑO, MES, DIA
-        if all(col in df.columns for col in ['AÑO', 'MES', 'DIA']):
-            df['FECHA_COMPLETA'] = pd.to_datetime(
-                df[['AÑO', 'MES', 'DIA']].rename(columns={'AÑO': 'year', 'MES': 'month', 'DIA': 'day'}),
-                errors='coerce'
-            )
-    
+        add_log("FECHA_COMPLETA copiada desde FECHA_INGR (fallback)")
+
     # Campos de texto - limpiar
     text_cols = ['PLACA', 'MARCA', 'LINEA', 'COMPAÑIA_DE_SEGUROS', 
                  'SINIESTRO', 'IMPREVISTO', 'ACCION', 'CAUSAL', 'ESTATUS']

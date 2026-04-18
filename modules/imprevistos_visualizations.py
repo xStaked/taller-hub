@@ -576,6 +576,190 @@ def render_estadisticas_por_causal(
 
 
 # ============================================================================
+# TASA DE IMPREVISTOS POR CAMBIO DE REPUESTO - CULPA DEL TALLER
+# ============================================================================
+
+CAUSALES_CULPA_TALLER = {
+    "NO COTIZADO",
+    "PREDESARME",
+    "DIGITACIÓN",
+    "DIGITACION",
+    "SIN FOTOS CLARAS",
+    "SIN DIAGNÓSTICO",
+    "SIN DIAGNOSTICO",
+}
+
+
+def _calcular_tasa_culpa_taller_cambio(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Calcula la tasa mensual de imprevistos con cambio de repuesto que son culpa del taller.
+
+    Reglas:
+    1. Filtrar registros donde ACCION contiene "CAMBIO"
+    2. Eliminar registros sin M._DE_O._INICIAL (el segundo registro de la misma placa)
+    3. Deduplicar por PLACA+SINIESTRO: misma placa con distinto siniestro cuenta como otro
+    4. Rate = culpa_taller / total_deduplicado * 100
+       Culpa del taller: CAUSAL en {no cotizado, predesarme, digitación, sin fotos claras, sin diagnóstico}
+    """
+    if df is None or df.empty:
+        return pd.DataFrame()
+
+    required = {'ACCION', 'AÑO', 'MES', 'PLACA'}
+    if not required.issubset(df.columns):
+        return pd.DataFrame()
+
+    df_w = df.copy()
+
+    # Step 1: solo registros con CAMBIO
+    df_cambio = df_w[df_w['ACCION'].str.contains('CAMBIO', na=False, case=False)].copy()
+    if df_cambio.empty:
+        return pd.DataFrame()
+
+    # Step 2: eliminar filas sin mano de obra inicial.
+    # Después de procesar_dataframe, M._DE_O._INICIAL es numérico con fillna(0),
+    # así que registros vacíos quedan como 0.0 — comparar numéricamente.
+    mo_col = 'M._DE_O._INICIAL'
+    if mo_col in df_cambio.columns:
+        mo_num = pd.to_numeric(df_cambio[mo_col], errors='coerce').fillna(0)
+        df_cambio = df_cambio[mo_num > 0].copy()
+
+    if df_cambio.empty:
+        return pd.DataFrame()
+
+    # Normalizar columnas clave
+    df_cambio['_PLACA'] = df_cambio['PLACA'].astype(str).str.upper().str.strip()
+    df_cambio['_SINIESTRO'] = (
+        df_cambio['SINIESTRO'].astype(str).str.upper().str.strip()
+        if 'SINIESTRO' in df_cambio.columns
+        else ''
+    )
+    df_cambio['_CAUSAL'] = (
+        df_cambio['CAUSAL'].astype(str).str.upper().str.strip()
+        if 'CAUSAL' in df_cambio.columns
+        else ''
+    )
+    df_cambio['_AÑO'] = pd.to_numeric(df_cambio['AÑO'], errors='coerce')
+    df_cambio['_MES'] = pd.to_numeric(df_cambio['MES'], errors='coerce')
+
+    df_cambio = df_cambio[
+        df_cambio['_AÑO'].notna() & df_cambio['_MES'].notna() &
+        (df_cambio['_AÑO'] > 2000) &
+        (df_cambio['_MES'] >= 1) & (df_cambio['_MES'] <= 12)
+    ].copy()
+
+    if df_cambio.empty:
+        return pd.DataFrame()
+
+    df_cambio['_AÑO'] = df_cambio['_AÑO'].astype(int)
+    df_cambio['_MES'] = df_cambio['_MES'].astype(int)
+
+    # Step 3: deduplicar por AÑO+MES+PLACA+SINIESTRO
+    df_cambio = df_cambio.drop_duplicates(subset=['_AÑO', '_MES', '_PLACA', '_SINIESTRO'])
+
+    # Step 4: marcar culpa del taller
+    df_cambio['_CULPA'] = df_cambio['_CAUSAL'].isin(CAUSALES_CULPA_TALLER)
+
+    # Agregar por mes
+    resumen = df_cambio.groupby(['_AÑO', '_MES']).agg(
+        total=('_PLACA', 'count'),
+        culpa_taller=('_CULPA', 'sum')
+    ).reset_index()
+
+    resumen['tasa'] = (resumen['culpa_taller'] / resumen['total'] * 100).round(1)
+    resumen['FECHA'] = pd.to_datetime(
+        resumen['_AÑO'].astype(str) + '-' + resumen['_MES'].astype(str) + '-01',
+        format='%Y-%m-%d', errors='coerce'
+    )
+    resumen = resumen[resumen['FECHA'].notna()].sort_values('FECHA').reset_index(drop=True)
+    resumen['mes_label'] = resumen['FECHA'].dt.strftime('%b').str.upper()
+    resumen.rename(columns={'_AÑO': 'año', '_MES': 'mes'}, inplace=True)
+
+    return resumen
+
+
+def render_grafico_culpa_taller_mensual(df=None):
+    """
+    Gráfico de línea: tasa mensual de imprevistos con cambio de repuesto (culpa del taller).
+    Estilo similar a la imagen de referencia del cliente.
+    """
+    import datetime
+    st.subheader("IMPREVISTOS CON CAMBIO DE REPUESTO")
+
+    if df is None or df.empty:
+        st.info("No hay datos disponibles.")
+        return
+
+    resumen = _calcular_tasa_culpa_taller_cambio(df)
+
+    if resumen.empty:
+        st.info("No se encontraron imprevistos con ACCION=CAMBIO y mano de obra registrada.")
+        return
+
+    años_disponibles = sorted(resumen['año'].unique().tolist(), reverse=True)
+    año_actual = datetime.datetime.now().year
+    default_idx = años_disponibles.index(año_actual) if año_actual in años_disponibles else 0
+    año_sel = st.selectbox(
+        "Año",
+        options=años_disponibles,
+        index=default_idx,
+        key="culpa_taller_año"
+    )
+    resumen = resumen[resumen['año'] == año_sel].copy()
+
+    if resumen.empty:
+        st.info(f"No hay datos para el año {año_sel}.")
+        return
+
+    fig = go.Figure()
+
+    fig.add_trace(go.Scatter(
+        x=resumen['mes_label'],
+        y=resumen['culpa_taller'],
+        mode='lines+markers+text',
+        line=dict(color='#B8D835', width=3),
+        marker=dict(size=10, color='#4472C4', line=dict(width=2, color='white')),
+        text=resumen['culpa_taller'].astype(int).astype(str),
+        textposition='top center',
+        textfont=dict(size=12, color='white'),
+        hovertemplate='%{x}: %{y} imprevistos<extra></extra>',
+        name='Culpa del Taller'
+    ))
+
+    fig.update_layout(
+        paper_bgcolor='#3D8B8B',
+        plot_bgcolor='#3D8B8B',
+        font=dict(color='white', family='Arial Black'),
+        title=dict(
+            text='IMPREVISTOS CON CAMBIO DE REPUESTO',
+            font=dict(size=18, color='white'),
+            x=0.02
+        ),
+        xaxis=dict(
+            showgrid=False,
+            showline=False,
+            tickfont=dict(size=13, color='white'),
+        ),
+        yaxis=dict(
+            showgrid=False,
+            showline=False,
+            visible=False,
+        ),
+        height=380,
+        margin=dict(l=30, r=30, t=70, b=40),
+        showlegend=False,
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Métricas resumidas
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Total imprevistos cambio", int(resumen['total'].sum()))
+    with col2:
+        st.metric("Culpa del taller", int(resumen['culpa_taller'].sum()))
+
+
+# ============================================================================
 # MAIN VISUALIZATION ENTRY POINT
 # ============================================================================
 
