@@ -1,6 +1,6 @@
 """
 ================================================================================
-CONFIGURACIÓN DE TALLERES - Distrikia Dashboard
+CONFIGURACIÓN DE TALLERES - Taller Hub
 ================================================================================
 Configuración de múltiples talleres para arquitectura multitaller.
 Versión 2.0 - Usa taller_manager.py para persistencia JSON.

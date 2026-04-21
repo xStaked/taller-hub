@@ -1,6 +1,6 @@
 """
 ================================================================================
-SIDEBAR - Distrikia Dashboard
+SIDEBAR - Taller Hub
 ================================================================================
 Funciones para el panel lateral: configuración, filtros y auto-refresh.
 Soporte multitaller con selector de talleres y CRUD integrado.
@@ -42,7 +42,7 @@ def render_sidebar():
     
     st.sidebar.markdown("""
     <div style="text-align: center; margin-bottom: 2rem;">
-        <h2 style="color: #0066CC; margin-bottom: 0.5rem;">🚗 DISTRIKIA</h2>
+        <h2 style="color: #0066CC; margin-bottom: 0.5rem;">🚗 TALLER HUB</h2>
         <p style="color: #64748B; font-size: 0.9rem;">Sistema de Gestión de Ahorros</p>
         <p style="color: #00CC66; font-size: 0.75rem;">🏪 Modo Multitaller</p>
     </div>

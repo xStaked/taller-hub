@@ -2,12 +2,12 @@
 
 ## ✅ Installation Complete!
 
-The new **Tasa de Imprevistos** module has been successfully integrated into your DISTRIKIA Dashboard.
+The new **Tasa de Imprevistos** module has been successfully integrated into your Taller Hub dashboard.
 
 ## 📁 New Files Created
 
 ```
-distrikia-dashboard/
+taller-hub/
 ├── modules/
 │   ├── imprevistos_config.py          # Configuration & data persistence
 │   ├── imprevistos_data.py            # Data entry forms

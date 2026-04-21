@@ -1,6 +1,6 @@
 """
 ================================================================================
-VISUALIZACIONES MULTITALLER - Distrikia Dashboard
+VISUALIZACIONES MULTITALLER - Taller Hub
 ================================================================================
 Funciones específicas para visualizaciones comparativas entre talleres.
 RF-MT: Análisis multitaller

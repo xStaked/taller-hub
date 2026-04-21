@@ -1,6 +1,6 @@
 """
 ================================================================================
-DISTRIKIA - Sistema de Gestión de Ahorros y Análisis de Talleres Automotrices
+TALLER HUB - Sistema de Gestión de Ahorros y Análisis de Talleres Automotrices
 Dashboard Ejecutivo con Auto-refresh - VERSIÓN MULTITALLER
 Versión: 2.0.0 | Fecha: Abril 2026
 Stakeholders: Alexander Cano (Analista/Gerente), Sergio Romero (Operativo)

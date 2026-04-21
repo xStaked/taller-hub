@@ -1,6 +1,6 @@
 """
 ================================================================================
-EXPORTACIÓN - Distrikia Dashboard
+EXPORTACIÓN - Taller Hub
 ================================================================================
 Funciones para exportar reportes en diferentes formatos.
 RF-004: Exportación de datos
@@ -127,7 +127,7 @@ def generate_pdf_report(df, filtros_aplicados, include_honorarios=True):
     # =========================================================================
     # HEADER DEL DOCUMENTO
     # =========================================================================
-    elements.append(Paragraph("🚗 DISTRIKIA", title_style))
+    elements.append(Paragraph("🚗 TALLER HUB", title_style))
     elements.append(
         Paragraph("Sistema de Gestión de Ahorros y Análisis de Talleres Automotrices", subtitle_style)
     )
@@ -442,7 +442,7 @@ def generate_pdf_report(df, filtros_aplicados, include_honorarios=True):
         fontName='Helvetica'
     )
     
-    elements.append(Paragraph("Distrikia Dashboard v1.0 | Desarrollado para RENOMOTRIZ", footer_style))
+    elements.append(Paragraph("Taller Hub v2.0 | Desarrollado para RENOMOTRIZ", footer_style))
     elements.append(Paragraph(
         f"Reporte generado el {datetime.now().strftime('%d/%m/%Y a las %H:%M')}", 
         footer_style
@@ -507,7 +507,7 @@ def generate_excel_report(df, filtros_aplicados):
                 str(filtros_aplicados),
                 len(df),
                 f"${df['DIFERENCIA'].sum():,.0f}" if 'DIFERENCIA' in df.columns else 'N/A',
-                'Distrikia Dashboard'
+                'Taller Hub'
             ]
         })
         metadata.to_excel(writer, sheet_name='Metadata', index=False)

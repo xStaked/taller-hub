@@ -1,6 +1,6 @@
 """
 ================================================================================
-VALIDACIONES - Distrikia Dashboard
+VALIDACIONES - Taller Hub
 ================================================================================
 Funciones de validación de calidad de datos.
 RF-005: Validaciones de calidad de datos

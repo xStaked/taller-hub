@@ -1,6 +1,6 @@
 """
 ================================================================================
-PROCESAMIENTO DE DATOS - Distrikia Dashboard
+PROCESAMIENTO DE DATOS - Taller Hub
 ================================================================================
 Funciones para limpiar, transformar y procesar los datos.
 RF-002: Limpieza y transformación de datos

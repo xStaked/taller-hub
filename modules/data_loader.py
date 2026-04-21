@@ -1,6 +1,6 @@
 """
 ================================================================================
-CARGA DE DATOS - Distrikia Dashboard
+CARGA DE DATOS - Taller Hub
 ================================================================================
 Funciones para cargar datos desde Google Sheets y archivos Excel locales.
 Soporte multitaller - RF-MT: Múltiples fuentes de datos

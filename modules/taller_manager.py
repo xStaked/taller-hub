@@ -1,6 +1,6 @@
 """
 ================================================================================
-GESTOR DE TALLERES - Distrikia Dashboard
+GESTOR DE TALLERES - Taller Hub
 ================================================================================
 Sistema CRUD para gestión dinámica de talleres con persistencia en JSON.
 Permite agregar, editar, eliminar y activar/desactivar talleres desde la UI.

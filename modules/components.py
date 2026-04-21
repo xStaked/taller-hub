@@ -1,6 +1,6 @@
 """
 ================================================================================
-COMPONENTES UI - Distrikia Dashboard
+COMPONENTES UI - Taller Hub
 ================================================================================
 Componentes reutilizables para el dashboard.
 """
@@ -19,7 +19,7 @@ def render_header():
         st.image("logo.png", width=100)
 
     with col_title:
-        st.markdown('<div class="main-header">🚗 DISTRIKIA</div>', unsafe_allow_html=True)
+        st.markdown('<div class="main-header">🚗 TALLER HUB</div>', unsafe_allow_html=True)
         st.markdown(
             '<div class="sub-header">Sistema de Gestión de Ahorros y Análisis de Talleres Automotrices</div>',
             unsafe_allow_html=True
@@ -31,7 +31,7 @@ def render_footer():
     st.divider()
     st.markdown("""
     <div style="text-align: center; color: #94A3B8; font-size: 0.8rem; padding: 2rem 0;">
-        <p>Distrikia Dashboard v1.0 | Desarrollado para RENOMOTRIZ</p>
+        <p>Taller Hub v2.0 | Desarrollado para RENOMOTRIZ</p>
         <p>Stakeholders: Alexander Cano (Analista) | Sergio Romero (Operativo)</p>
     </div>
     """, unsafe_allow_html=True)
@@ -148,7 +148,7 @@ def render_export_section(df_filtered, filtros):
         st.download_button(
             label="📊 Descargar Excel (Múltiples hojas)",
             data=excel_buffer,
-            file_name=f"distrikia_reporte_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+            file_name=f"taller_hub_reporte_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             width='stretch'
         )
@@ -159,7 +159,7 @@ def render_export_section(df_filtered, filtros):
         st.download_button(
             label="📄 Descargar CSV",
             data=csv_data,
-            file_name=f"distrikia_datos_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+            file_name=f"taller_hub_datos_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
             mime="text/csv",
             width='stretch'
         )
@@ -171,7 +171,7 @@ def render_export_section(df_filtered, filtros):
         st.download_button(
             label=f"📑 Descargar PDF ({honorarios_text} honorarios)",
             data=pdf_buffer,
-            file_name=f"distrikia_dashboard_{honorarios_text}_honorarios_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
+            file_name=f"taller_hub_dashboard_{honorarios_text}_honorarios_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
             mime="application/pdf",
             width='stretch'
         )

@@ -1,6 +1,6 @@
 """
 ================================================================================
-CHART CONFIGURATION - Distrikia Dashboard
+CHART CONFIGURATION - Taller Hub
 ================================================================================
 Manages chart type preferences (Bar/Line) for presentations.
 

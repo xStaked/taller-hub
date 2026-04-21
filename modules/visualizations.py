@@ -1,6 +1,6 @@
 """
 ================================================================================
-VISUALIZACIONES - Distrikia Dashboard
+VISUALIZACIONES - Taller Hub
 ================================================================================
 Funciones para renderizar gráficos, KPIs y tablas.
 RF-003: Componentes de visualización

@@ -1,4 +1,4 @@
-# Módulo de Tasa de Imprevistos - DISTRIKIA Dashboard
+# Módulo de Tasa de Imprevistos - Taller Hub
 
 ## Descripción General
 
@@ -248,4 +248,4 @@ IMPREVISTO_TIPOS = {
 
 ## Soporte
 
-Para preguntas o problemas con el módulo, contacta al equipo de desarrollo de DISTRIKIA.
+Para preguntas o problemas con el módulo, contacta al equipo de desarrollo de Taller Hub.

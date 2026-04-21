@@ -1,6 +1,6 @@
 """
 ================================================================================
-IMPREVISTOS CONFIGURATION - Distrikia Dashboard
+IMPREVISTOS CONFIGURATION - Taller Hub
 ================================================================================
 Configuration for the Tasa de Imprevistos (Unforeseen Events Rate) module.
 

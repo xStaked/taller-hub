@@ -1,6 +1,6 @@
 """
 ================================================================================
-CONFIGURACIÓN Y CONSTANTES - Distrikia Dashboard
+CONFIGURACIÓN Y CONSTANTES - Taller Hub
 ================================================================================
 Configuración de página, estilos CSS y constantes del sistema.
 """
@@ -14,7 +14,7 @@ import streamlit as st
 def setup_page_config():
     """Configura la página de Streamlit con los colores corporativos"""
     st.set_page_config(
-        page_title="Distrikia | Dashboard de Ahorros",
+        page_title="Taller Hub | Dashboard de Ahorros",
         page_icon="🚗",
         layout="wide",
         initial_sidebar_state="expanded"

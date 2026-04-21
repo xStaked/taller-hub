@@ -1,6 +1,6 @@
 """
 ================================================================================
-IMPREVISTOS VISUALIZATIONS - Distrikia Dashboard
+IMPREVISTOS VISUALIZATIONS - Taller Hub
 ================================================================================
 Visualization components for the Tasa de Imprevistos module.
 

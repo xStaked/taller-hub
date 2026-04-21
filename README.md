@@ -152,7 +152,7 @@ Cada taller debe tener un Google Sheet con:
 ## 📁 Estructura del Proyecto
 
 ```
-distrikia-dashboard/
+taller-hub/
 ├── app.py                          # Punto de entrada principal (multitaller)
 ├── requirements.txt                # Dependencias del proyecto
 ├── modules/                        # Lógica modular del dashboard
@@ -323,6 +323,6 @@ Para reportar problemas o solicitar funcionalidades, contactar al equipo de desa
 ---
 
 <p align="center">
-  <strong>Distrikia Dashboard v2.0 - Multitaller</strong><br>
+  <strong>Taller Hub v2.0 - Multitaller</strong><br>
   <em>Abril 2026</em>
 </p>

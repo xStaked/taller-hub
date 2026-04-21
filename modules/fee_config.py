@@ -1,6 +1,6 @@
 """
 ================================================================================
-FEE CONFIGURATION - Distrikia Dashboard
+FEE CONFIGURATION - Taller Hub
 ================================================================================
 Manages per-taller fee/honorarios configuration with threshold rules, 
 customizable rates, and presentation mode toggle.
