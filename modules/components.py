@@ -6,7 +6,9 @@ Componentes reutilizables para el dashboard.
 """
 
 import streamlit as st
+import pandas as pd
 from datetime import datetime
+from .data_processor import filter_authorized_savings_records
 
 
 def render_header():
@@ -187,3 +189,105 @@ def render_error_state(error):
 def render_empty_state():
     """Muestra el estado cuando no hay datos"""
     st.warning("⚠️ No se encontraron datos en la hoja")
+
+
+def render_savings_debug_panel(df):
+    """
+    Panel de diagnóstico para ahorro mensual.
+    Valida la agregación mensual usando únicamente DIA/MES/AÑO.
+    FECHA_INGR y FECHA_AUTO quedan como referencia auxiliar.
+    """
+    with st.expander("🧪 Debug Ahorro Mensual", expanded=False):
+        if df is None or df.empty:
+            st.info("No hay datos para depurar.")
+            return
+
+        if not {'AÑO', 'MES', 'DIFERENCIA'}.issubset(df.columns):
+            st.warning("Faltan columnas AÑO, MES o DIFERENCIA para depurar el ahorro mensual.")
+            return
+
+        df_debug = filter_authorized_savings_records(df)
+        if df_debug is None or df_debug.empty:
+            st.info("No hay registros AUTORIZADO para depurar.")
+            return
+
+        df_debug = df_debug[df_debug['DIFERENCIA'].fillna(0) != 0].copy()
+        if df_debug.empty:
+            st.info("No hay registros AUTORIZADO con ahorro distinto de cero.")
+            return
+
+        df_debug['FECHA_AUTO_DT'] = pd.to_datetime(df_debug.get('FECHA_AUTO'), errors='coerce', dayfirst=True)
+        df_debug['FECHA_INGR_DT'] = pd.to_datetime(df_debug.get('FECHA_INGR'), errors='coerce', dayfirst=True)
+        df_debug['AUTO_AÑO'] = df_debug['FECHA_AUTO_DT'].dt.year
+        df_debug['AUTO_MES'] = df_debug['FECHA_AUTO_DT'].dt.month
+        df_debug['INGR_AÑO'] = df_debug['FECHA_INGR_DT'].dt.year
+        df_debug['INGR_MES'] = df_debug['FECHA_INGR_DT'].dt.month
+
+        resumen_actual = (
+            df_debug.groupby(['AÑO', 'MES'])['DIFERENCIA']
+            .sum()
+            .reset_index()
+            .rename(columns={'DIFERENCIA': 'AHORRO_DIA_MES_ANO'})
+        )
+
+        resumen_ingr = (
+            df_debug[df_debug['INGR_AÑO'].notna() & df_debug['INGR_MES'].notna()]
+            .groupby(['INGR_AÑO', 'INGR_MES'])['DIFERENCIA']
+            .sum()
+            .reset_index()
+            .rename(columns={'INGR_AÑO': 'AÑO', 'INGR_MES': 'MES', 'DIFERENCIA': 'REF_FECHA_INGR'})
+        )
+
+        comparativo = (
+            resumen_actual.merge(resumen_ingr, on=['AÑO', 'MES'], how='outer')
+            .fillna(0)
+            .sort_values(['AÑO', 'MES'])
+        )
+        comparativo['DELTA_INGR_VS_COMPONENTES'] = comparativo['REF_FECHA_INGR'] - comparativo['AHORRO_DIA_MES_ANO']
+        comparativo['PERIODO'] = comparativo['MES'].astype(int).astype(str).str.zfill(2) + '/' + comparativo['AÑO'].astype(int).astype(str)
+
+        mismatch_ingr = df_debug[
+            df_debug['INGR_AÑO'].notna() &
+            ((df_debug['AÑO'] != df_debug['INGR_AÑO']) | (df_debug['MES'] != df_debug['INGR_MES']))
+        ].copy()
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Regs autorizados con ahorro", f"{len(df_debug):,}")
+        c2.metric("Con DIA/MES/AÑO válidos", f"{len(df_debug[df_debug['FECHA_COMPLETA'].notna()]):,}")
+        c3.metric("Difieren vs FECHA_INGR", f"{len(mismatch_ingr):,}", f"${mismatch_ingr['DIFERENCIA'].sum():,.0f}")
+
+        st.caption("La lógica oficial usa solo DIA/MES/AÑO. La comparación con FECHA_INGR es solo para detectar incongruencias en la fuente.")
+
+        st.dataframe(
+            comparativo[['PERIODO', 'AHORRO_DIA_MES_ANO', 'REF_FECHA_INGR', 'DELTA_INGR_VS_COMPONENTES']],
+            width='stretch',
+            hide_index=True,
+        )
+
+        if not mismatch_ingr.empty:
+            movement = (
+                mismatch_ingr.groupby(['AÑO', 'MES', 'INGR_AÑO', 'INGR_MES'])['DIFERENCIA']
+                .sum()
+                .reset_index()
+                .sort_values('DIFERENCIA', ascending=False)
+            )
+            movement['DE'] = movement['MES'].astype(int).astype(str).str.zfill(2) + '/' + movement['AÑO'].astype(int).astype(str)
+            movement['HACIA'] = movement['INGR_MES'].astype(int).astype(str).str.zfill(2) + '/' + movement['INGR_AÑO'].astype(int).astype(str)
+
+            st.markdown("**Incongruencias detectadas vs FECHA_INGR**")
+            st.dataframe(
+                movement[['DE', 'HACIA', 'DIFERENCIA']],
+                width='stretch',
+                hide_index=True,
+            )
+
+            detalle_cols = [
+                col for col in ['PLACA', 'SINIESTRO', 'DIFERENCIA', 'DIA', 'MES', 'AÑO', 'FECHA_INGR', 'FECHA_AUTO', 'ESTATUS', 'TALLER_ORIGEN']
+                if col in mismatch_ingr.columns
+            ]
+            st.markdown("**Filas con conflicto entre componentes y FECHA_INGR**")
+            st.dataframe(
+                mismatch_ingr[detalle_cols].sort_values('DIFERENCIA', ascending=False),
+                width='stretch',
+                hide_index=True,
+            )

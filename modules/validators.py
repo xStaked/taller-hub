@@ -39,15 +39,16 @@ def run_validations(df):
             alerts.append(("warning", 
                 f"RF-005.3: {len(duplicados)} combinaciones placa/siniestro duplicadas"))
     
-    # RF-005.4: Validación de fechas (no futuras, no muy antiguas)
-    if 'FECHA_INGR' in df.columns:
+    # RF-005.4: Validación de fechas usando la fecha canónica derivada de DIA/MES/AÑO
+    fecha_col = 'FECHA_COMPLETA' if 'FECHA_COMPLETA' in df.columns else 'FECHA_INGR'
+    if fecha_col in df.columns:
         hoy = pd.Timestamp.now()
-        futuras = df[df['FECHA_INGR'] > hoy + pd.Timedelta(days=1)]
+        futuras = df[df[fecha_col] > hoy + pd.Timedelta(days=1)]
         if len(futuras) > 0:
             alerts.append(("error", 
                 f"RF-005.4: {len(futuras)} registros con fecha futura"))
         
-        muy_antiguas = df[df['FECHA_INGR'] < hoy - pd.Timedelta(days=365*2)]
+        muy_antiguas = df[df[fecha_col] < hoy - pd.Timedelta(days=365*2)]
         if len(muy_antiguas) > 0:
             alerts.append(("warning", 
                 f"RF-005.4: {len(muy_antiguas)} registros con fecha mayor a 2 años"))

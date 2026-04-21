@@ -10,6 +10,7 @@ import streamlit as st
 import time
 from datetime import datetime
 from typing import List, Dict, Optional
+from .data_processor import filter_authorized_savings_records
 
 from .taller_config import (
     render_selector_talleres_sidebar as _render_selector_legacy,
@@ -101,28 +102,6 @@ def render_sidebar():
     # =========================================================================
     render_chart_type_selector()
 
-    st.sidebar.divider()
-
-    # =========================================================================
-    # ACCESO RÁPIDO: MÓDULO DE IMPREVISTOS
-    # =========================================================================
-    st.sidebar.header("⚠️ Imprevistos")
-    
-    if st.sidebar.button(
-        "📊 Registrar Imprevistos",
-        use_container_width=True,
-        type="primary",
-        key="sidebar_imprevistos_btn"
-    ):
-        st.session_state['mostrar_imprevistos'] = True
-    
-    if st.sidebar.button(
-        "📋 Ver Resumen de Imprevistos",
-        use_container_width=True,
-        key="sidebar_imprevistos_resumen_btn"
-    ):
-        st.session_state['mostrar_imprevistos_resumen'] = True
-    
     st.sidebar.divider()
 
     # =========================================================================
@@ -382,6 +361,10 @@ def render_resumen_talleres_sidebar(df):
     Muestra un resumen rápido de los datos por taller en el sidebar.
     """
     if df is None or df.empty or "TALLER_ORIGEN" not in df.columns:
+        return
+
+    df = filter_authorized_savings_records(df)
+    if df is None or df.empty:
         return
     
     st.sidebar.divider()

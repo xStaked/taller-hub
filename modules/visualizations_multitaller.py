@@ -15,6 +15,7 @@ from plotly.subplots import make_subplots
 from .config import PORCENTAJE_HONORARIOS
 from .taller_config import get_color_taller, TALLERES_CONFIG
 from .fee_config import calculate_fee, load_fee_config, calculate_fees_for_df
+from .data_processor import filter_authorized_savings_records
 
 
 # ============================================================================
@@ -30,6 +31,11 @@ def render_kpis_multitaller(df):
     
     if "TALLER_ORIGEN" not in df.columns:
         # Fallback: usar KPIs normales
+        return
+
+    df = filter_authorized_savings_records(df)
+    if df is None or df.empty:
+        st.info("No hay registros AUTORIZADO para comparar ahorro entre talleres.")
         return
     
     talleres = df["TALLER_ORIGEN"].unique()
@@ -110,6 +116,10 @@ def render_ranking_talleres(df):
     """
     if df is None or df.empty or "TALLER_ORIGEN" not in df.columns:
         return
+
+    df = filter_authorized_savings_records(df)
+    if df is None or df.empty:
+        return
     
     talleres = df["TALLER_ORIGEN"].unique()
     if len(talleres) <= 1:
@@ -164,6 +174,11 @@ def render_comparativo_anual(df):
         return
 
     if "AÑO" not in df.columns or "MES" not in df.columns or "DIFERENCIA" not in df.columns:
+        return
+
+    df = filter_authorized_savings_records(df)
+    if df is None or df.empty:
+        st.info("No hay registros AUTORIZADO para construir el comparativo anual.")
         return
 
     # Filtrar datos válidos
@@ -543,6 +558,10 @@ def render_vista_multitaller(df, key_suffix=""):
         key_suffix: Sufijo para keys únicos de Streamlit
     """
     if df is None or df.empty or "TALLER_ORIGEN" not in df.columns:
+        return
+
+    df = filter_authorized_savings_records(df)
+    if df is None or df.empty:
         return
     
     talleres = df["TALLER_ORIGEN"].unique()

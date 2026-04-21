@@ -13,7 +13,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from .config import PORCENTAJE_HONORARIOS
-from .data_processor import add_log
+from .data_processor import add_log, filter_authorized_savings_records
 from .fee_config import calculate_fee, load_fee_config, calculate_fees_for_df
 from .chart_config import get_chart_type_for_id, CHART_TYPE_BAR, CHART_TYPE_LINE
 from .imprevistos_processor import extraer_imprevistos_from_dataframe
@@ -35,6 +35,11 @@ def render_kpis(df):
 
     if 'DIFERENCIA' not in df.columns:
         st.warning("No se encontró columna de DIFERENCIA/AHORRO")
+        return
+
+    df = filter_authorized_savings_records(df)
+    if df is None or df.empty:
+        st.info("No hay registros AUTORIZADO para calcular métricas de ahorro.")
         return
 
     total_ahorro = df['DIFERENCIA'].sum()
@@ -141,6 +146,12 @@ def render_grafico_ahorro_mes(df):
         st.warning("Datos de fecha incompletos para gráfico mensual")
         return
 
+    df = filter_authorized_savings_records(df)
+    if df is None or df.empty:
+        st.info("No hay registros AUTORIZADO para construir el gráfico de ahorro.")
+        return
+    add_log(f"render_grafico_ahorro_mes: registros autorizados={len(df)}")
+
     # Filtrar solo registros con AÑO y MES válidos
     df_valid = df[(df['AÑO'].notna()) & (df['MES'].notna()) &
                   (df['AÑO'] > 2000) & (df['MES'] >= 1) & (df['MES'] <= 12)]
@@ -148,6 +159,7 @@ def render_grafico_ahorro_mes(df):
     if df_valid.empty:
         st.warning("No hay datos con fechas válidas para el gráfico")
         return
+    add_log(f"render_grafico_ahorro_mes: registros válidos con fecha={len(df_valid)}")
 
     df_mes = df_valid.groupby(['AÑO', 'MES']).agg({
         'DIFERENCIA': 'sum',
@@ -175,6 +187,13 @@ def render_grafico_ahorro_mes(df):
     df_mes = df_mes[df_mes['FECHA'].notna()]
     df_mes = df_mes.sort_values('FECHA')
     df_mes['TEXTO_FECHA'] = df_mes['FECHA'].dt.strftime('%b %Y')
+    add_log(
+        "render_grafico_ahorro_mes: resumen mensual=" +
+        "; ".join(
+            f"{row['TEXTO_FECHA']}=${row['DIFERENCIA']:,.0f}"
+            for _, row in df_mes.iterrows()
+        )
+    )
 
     # Get chart type from config
     chart_type = get_chart_type_for_id('ahorro_mes')
@@ -497,7 +516,8 @@ def render_tabla_detalle(df):
     
     # Seleccionar columnas para mostrar
     columnas_display = []
-    columnas_posibles = ['FECHA_INGR', 'PLACA', 'MARCA', 'LINEA', 'COMPAÑIA_DE_SEGUROS',
+    fecha_display_col = 'FECHA_COMPLETA' if 'FECHA_COMPLETA' in df.columns else 'FECHA_INGR'
+    columnas_posibles = [fecha_display_col, 'PLACA', 'MARCA', 'LINEA', 'COMPAÑIA_DE_SEGUROS',
                         'IMPREVISTO', 'ACCION', 'CAUSAL', 'M._DE_O._INICIAL', 
                         'M._DE_O._FINAL', 'DIFERENCIA', 'ESTATUS', 'OBSERVACION']
     
@@ -517,8 +537,11 @@ def render_tabla_detalle(df):
             df_display[col] = df_display[col].apply(lambda x: f"${x:,.0f}" if pd.notna(x) and x != 0 else "")
     
     # Formatear fechas
-    if 'FECHA_INGR' in df_display.columns:
-        df_display['FECHA_INGR'] = pd.to_datetime(df_display['FECHA_INGR'], errors='coerce').dt.strftime('%d/%m/%Y')
+    if fecha_display_col in df_display.columns:
+        df_display[fecha_display_col] = pd.to_datetime(
+            df_display[fecha_display_col], errors='coerce'
+        ).dt.strftime('%d/%m/%Y')
+        df_display = df_display.rename(columns={fecha_display_col: 'FECHA'})
     
     # Badge para estatus
     if 'ESTATUS' in df_display.columns:

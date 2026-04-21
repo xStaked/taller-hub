@@ -37,7 +37,6 @@ from modules.visualizations import (
 
 # Importar visualizaciones de imprevistos
 from modules.imprevistos_visualizations import (
-    render_imprevistos_visualizations,
     render_grafico_tasa_imprevistos_nuevo,
     render_grafico_culpa_taller_mensual,
 )
@@ -57,6 +56,7 @@ from modules.sidebar import (
     aplicar_filtros,
     render_resumen_talleres_sidebar
 )
+from modules.data_processor import filter_authorized_savings_records
 
 # Importar componentes UI
 from modules.components import (
@@ -64,6 +64,7 @@ from modules.components import (
     render_footer,
     render_alerts,
     render_data_info,
+    render_savings_debug_panel,
     render_export_section,
     render_error_state,
     render_empty_state
@@ -208,6 +209,8 @@ def main():
     # Información de filtros aplicados
     if len(df_filtered) != len(df):
         st.info(f"📊 Filtros aplicados: mostrando {len(df_filtered)} de {len(df)} registros")
+
+    render_savings_debug_panel(df_filtered)
     
     # =========================================================================
     # SECCIÓN: KPIs COMPARATIVOS MULTITALLER
@@ -238,8 +241,9 @@ def main():
     # SECCIÓN: COMPARATIVO ANUAL (Año vs Año)
     # =========================================================================
     # Solo mostrar si hay datos de más de 1 año en el DataFrame filtrado
-    if df_filtered is not None and not df_filtered.empty and 'AÑO' in df_filtered.columns:
-        años_unicos = df_filtered['AÑO'].dropna().unique()
+    df_ahorro_autorizado = filter_authorized_savings_records(df_filtered)
+    if df_ahorro_autorizado is not None and not df_ahorro_autorizado.empty and 'AÑO' in df_ahorro_autorizado.columns:
+        años_unicos = df_ahorro_autorizado['AÑO'].dropna().unique()
         if len(años_unicos) > 1:
             st.subheader("📅 Comparativo Anual")
             render_comparativo_anual(df_filtered)
@@ -285,35 +289,8 @@ def main():
     st.divider()
 
     # =========================================================================
-    # SECCIÓN: TASA DE IMPREVISTOS (NUEVO)
+    # SECCIÓN: TASA DE IMPREVISTOS
     # =========================================================================
-    
-    # Check if we should show imprevistos module from sidebar buttons
-    mostrar_imprevistos = st.session_state.get('mostrar_imprevistos', False)
-    mostrar_imprevistos_resumen = st.session_state.get('mostrar_imprevistos_resumen', False)
-    
-    if mostrar_imprevistos or mostrar_imprevistos_resumen:
-        st.subheader("⚠️ Módulo de Tasa de Imprevistos")
-        
-        if mostrar_imprevistos:
-            # Show full data entry form
-            from modules.imprevistos_data import render_imprevistos_data_entry
-            render_imprevistos_data_entry()
-        
-        if mostrar_imprevistos_resumen:
-            # Show just the summary table
-            from modules.imprevistos_data import render_resumen_mensual_table
-            render_resumen_mensual_table()
-        
-        # Button to close the imprevistos module
-        if st.button("✖ Cerrar Módulo de Imprevistos"):
-            st.session_state['mostrar_imprevistos'] = False
-            st.session_state['mostrar_imprevistos_resumen'] = False
-            st.rerun()
-        
-        st.divider()
-    
-    # Always show the chart section
     with st.expander("📊 Ver Gráfico de Tasa de Imprevistos", expanded=True):
         render_grafico_tasa_imprevistos_nuevo(
             df=df_filtered,

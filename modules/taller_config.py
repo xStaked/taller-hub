@@ -258,11 +258,16 @@ def get_resumen_por_taller(df_consolidado) -> Optional:
     """
     import pandas as pd
     from .fee_config import calculate_fees_for_df, load_fee_config
+    from .data_processor import filter_authorized_savings_records
 
     if df_consolidado is None or df_consolidado.empty:
         return None
 
     if "TALLER_ORIGEN" not in df_consolidado.columns:
+        return None
+
+    df_consolidado = filter_authorized_savings_records(df_consolidado)
+    if df_consolidado is None or df_consolidado.empty:
         return None
 
     resumen = df_consolidado.groupby("TALLER_ORIGEN").agg({

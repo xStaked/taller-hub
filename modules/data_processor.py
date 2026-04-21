@@ -31,6 +31,40 @@ def clear_debug_logs():
     debug_logs = []
 
 
+def normalize_estatus_value(value):
+    """
+    Normaliza ESTATUS a un conjunto canónico en mayúsculas.
+    La regla de negocio de ahorro cuenta únicamente registros AUTORIZADO.
+    """
+    if pd.isna(value):
+        return ""
+
+    status = str(value).strip().upper()
+
+    if not status or status in {"NAN", "NONE", "NAT"}:
+        return ""
+    if "AUTORIZ" in status:
+        return "AUTORIZADO"
+    if "RECHAZ" in status:
+        return "RECHAZADO"
+    if "PEND" in status:
+        return "PENDIENTE"
+
+    return status
+
+
+def filter_authorized_savings_records(df):
+    """
+    Retorna solo registros autorizados para métricas de ahorro.
+    Si no existe ESTATUS, devuelve el DataFrame original por compatibilidad.
+    """
+    if df is None or df.empty or 'ESTATUS' not in df.columns:
+        return df
+
+    estatus_normalizado = df['ESTATUS'].apply(normalize_estatus_value)
+    return df[estatus_normalizado == "AUTORIZADO"].copy()
+
+
 def procesar_dataframe(df, fuente="Google Sheets"):
     """
     Procesa y limpia el DataFrame con las transformaciones necesarias
@@ -57,14 +91,24 @@ def procesar_dataframe(df, fuente="Google Sheets"):
     actual_columns = {}
     for standard_name, possible_names in COLUMN_MAPPING.items():
         for col in df.columns:
-            if any(possible in col for possible in possible_names):
+            # Match exacto para nombres de 1 carácter (Q, R, S)
+            exact_short = any(len(p) == 1 and p == col for p in possible_names)
+            # Substring para nombres de más de 1 carácter
+            substring = any(len(p) > 1 and p in col for p in possible_names)
+            if exact_short or substring:
                 actual_columns[standard_name] = col
                 break
-    
+
     add_log(f"Columnas mapeadas: {actual_columns}")
-    
-    # Renombrar columnas encontradas
-    rename_map = {v: k for k, v in actual_columns.items() if v in df.columns}
+
+    # Renombrar columnas encontradas (evitar crear duplicados)
+    rename_map = {}
+    for standard_name, actual_col in actual_columns.items():
+        if actual_col in df.columns:
+            # Si el nombre destino ya existe como otra columna, no renombrar
+            if standard_name in df.columns and actual_col != standard_name:
+                continue
+            rename_map[actual_col] = standard_name
     df = df.rename(columns=rename_map)
     
     add_log(f"Columnas finales: {list(df.columns)}")
@@ -83,30 +127,31 @@ def procesar_dataframe(df, fuente="Google Sheets"):
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
             add_log(f"  {col} suma: {df[col].sum()}")
     
-    # Fechas
+    # Fechas auxiliares: se mantienen solo como referencia visual/debug.
+    # La lógica de negocio debe usar únicamente DIA/MES/AÑO.
     date_cols = ['FECHA_INGR', 'FECHA_AUTO']
     for col in date_cols:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
-            add_log(f"Columna fecha procesada: {col}")
-    
-    # AÑO y MES: las columnas directas son la fuente primaria.
-    # Solo derivar de FECHA_INGR si no existen o están vacías.
-    if 'AÑO' not in df.columns or df['AÑO'].isna().all():
-        if 'FECHA_INGR' in df.columns:
-            df['AÑO'] = df['FECHA_INGR'].dt.year
-            df['MES'] = df['FECHA_INGR'].dt.month
-            add_log("AÑO y MES extraídos de FECHA_INGR (fallback)")
-        else:
-            add_log("AÑO y MES no encontrados")
-    else:
-        add_log("AÑO y MES usados desde columnas directas (DIA/MES/AÑO)")
+            add_log(f"Columna auxiliar de fecha procesada: {col}")
 
-    # Asegurar que AÑO y MES sean numéricos (mantener NaN en lugar de 0 para fechas inválidas)
-    if 'AÑO' in df.columns:
-        df['AÑO'] = pd.to_numeric(df['AÑO'], errors='coerce')
-    if 'MES' in df.columns:
-        df['MES'] = pd.to_numeric(df['MES'], errors='coerce')
+    # Componentes de fecha: usar DIA/MES/AÑO como fuente primaria.
+    for col in ['DIA', 'MES', 'AÑO']:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+            add_log(f"Columna componente de fecha normalizada: {col}")
+
+    if all(col in df.columns for col in ['DIA', 'MES', 'AÑO']):
+        fecha_desde_componentes = pd.to_datetime(
+            df[['AÑO', 'MES', 'DIA']].rename(
+                columns={'AÑO': 'year', 'MES': 'month', 'DIA': 'day'}
+            ),
+            errors='coerce'
+        )
+        add_log("Fecha base construida exclusivamente desde DIA/MES/AÑO")
+    else:
+        fecha_desde_componentes = pd.Series(pd.NaT, index=df.index)
+        add_log("No fue posible construir fecha base desde DIA/MES/AÑO")
 
     # Calcular DIFERENCIA si no existe o es cero
     if 'DIFERENCIA' not in df.columns or df['DIFERENCIA'].sum() == 0:
@@ -116,22 +161,9 @@ def procesar_dataframe(df, fuente="Google Sheets"):
 
     add_log(f"render_kpis: DIFERENCIA existe={('DIFERENCIA' in df.columns)}, suma={df.get('DIFERENCIA', pd.Series([0])).sum()}")
 
-    # FECHA_COMPLETA: priorizar AÑO/MES/DIA sobre FECHA_INGR
-    if all(col in df.columns for col in ['AÑO', 'MES', 'DIA']):
-        df['FECHA_COMPLETA'] = pd.to_datetime(
-            df[['AÑO', 'MES', 'DIA']].rename(columns={'AÑO': 'year', 'MES': 'month', 'DIA': 'day'}),
-            errors='coerce'
-        )
-        add_log("FECHA_COMPLETA construida desde AÑO/MES/DIA")
-    elif all(col in df.columns for col in ['AÑO', 'MES']):
-        df['FECHA_COMPLETA'] = pd.to_datetime(
-            df[['AÑO', 'MES']].assign(day=1).rename(columns={'AÑO': 'year', 'MES': 'month'}),
-            errors='coerce'
-        )
-        add_log("FECHA_COMPLETA construida desde AÑO/MES (sin DIA)")
-    elif 'FECHA_INGR' in df.columns:
-        df['FECHA_COMPLETA'] = df['FECHA_INGR']
-        add_log("FECHA_COMPLETA copiada desde FECHA_INGR (fallback)")
+    # FECHA_COMPLETA se deriva solo de DIA/MES/AÑO.
+    df['FECHA_COMPLETA'] = fecha_desde_componentes
+    add_log("FECHA_COMPLETA asignada desde DIA/MES/AÑO sin usar fallbacks")
 
     # Campos de texto - limpiar
     text_cols = ['PLACA', 'MARCA', 'LINEA', 'COMPAÑIA_DE_SEGUROS', 
@@ -140,6 +172,10 @@ def procesar_dataframe(df, fuente="Google Sheets"):
         if col in df.columns:
             df[col] = df[col].astype(str).str.strip().str.upper()
             df[col] = df[col].replace('NAN', '').replace('NONE', '').replace('NAT', '')
+
+    if 'ESTATUS' in df.columns:
+        df['ESTATUS'] = df['ESTATUS'].apply(normalize_estatus_value)
+        add_log("ESTATUS normalizado a valores canónicos")
     
     add_log(f"Procesamiento completado. Filas: {len(df)}, Columnas: {len(df.columns)}")
     return df

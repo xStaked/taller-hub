@@ -15,6 +15,7 @@ import streamlit as st
 import json
 from pathlib import Path
 from typing import Dict, Optional
+from .data_processor import filter_authorized_savings_records
 
 # ============================================================================
 # FEE CONFIGURATION MANAGEMENT
@@ -176,13 +177,15 @@ def calculate_fees_for_df(df, config=None):
     """
     if config is None:
         config = load_fee_config()
+
+    df = filter_authorized_savings_records(df)
     
     result = {
         'total': None,
         'by_taller': {}
     }
     
-    if 'DIFERENCIA' not in df.columns:
+    if df is None or df.empty or 'DIFERENCIA' not in df.columns:
         return result
     
     # Calculate overall fee
