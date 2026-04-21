@@ -27,6 +27,7 @@ from .imprevistos_processor import (
     calcular_estadisticas,
     calcular_estadisticas_por_tipo,
     calcular_estadisticas_por_causal,
+    resumir_imprevistos_mensuales,
 )
 
 
@@ -81,11 +82,8 @@ def render_grafico_tasa_imprevistos_nuevo(
             total_vehiculos=('PLACA', 'count')
         ).reset_index()
         
-        # Monthly imprevistos count
-        df_imp_mes = df_imprevistos.groupby(['año', 'mes']).agg(
-            total_imprevistos=('placa', 'count'),
-            culpa_taller=('es_culpa_taller', 'sum')
-        ).reset_index()
+        # Monthly imprevistos count with the same business rules used in CAMBIO charts
+        df_imp_mes = resumir_imprevistos_mensuales(df=df, año=año)
         
         # Merge
         df_resumen = df_vehiculos.merge(df_imp_mes, on=['año', 'mes'], how='left')
@@ -596,9 +594,9 @@ def _calcular_tasa_culpa_taller_cambio(df: pd.DataFrame) -> pd.DataFrame:
 
     Reglas:
     1. Filtrar registros donde ACCION contiene "CAMBIO"
-    2. Eliminar registros sin M._DE_O._INICIAL (el segundo registro de la misma placa)
-    3. Deduplicar por PLACA+SINIESTRO: misma placa con distinto siniestro cuenta como otro
-    4. Rate = culpa_taller / total_deduplicado * 100
+    2. No excluir registros por ESTATUS o mano de obra inicial
+    3. No deduplicar placas/siniestros: cada registro válido cuenta
+    4. Rate = culpa_taller / total_registros_validos * 100
        Culpa del taller: CAUSAL en {no cotizado, predesarme, digitación, sin fotos claras, sin diagnóstico}
     """
     if df is None or df.empty:
@@ -615,16 +613,18 @@ def _calcular_tasa_culpa_taller_cambio(df: pd.DataFrame) -> pd.DataFrame:
     if df_cambio.empty:
         return pd.DataFrame()
 
-    # Step 2: eliminar filas sin mano de obra inicial.
-    # Después de procesar_dataframe, M._DE_O._INICIAL es numérico con fillna(0),
-    # así que registros vacíos quedan como 0.0 — comparar numéricamente.
+    # Step 2: no descartar registros por estatus o mano de obra inicial.
     mo_col = 'M._DE_O._INICIAL'
+    status_col = 'ESTATUS'
     if mo_col in df_cambio.columns:
-        mo_num = pd.to_numeric(df_cambio[mo_col], errors='coerce').fillna(0)
-        df_cambio = df_cambio[mo_num > 0].copy()
+        df_cambio['_MO_INICIAL'] = pd.to_numeric(df_cambio[mo_col], errors='coerce').fillna(0)
+    else:
+        df_cambio['_MO_INICIAL'] = 0
 
-    if df_cambio.empty:
-        return pd.DataFrame()
+    if status_col in df_cambio.columns:
+        df_cambio['_ESTATUS'] = df_cambio[status_col].astype(str).str.upper().str.strip()
+    else:
+        df_cambio['_ESTATUS'] = ''
 
     # Normalizar columnas clave
     df_cambio['_PLACA'] = df_cambio['PLACA'].astype(str).str.upper().str.strip()
@@ -653,12 +653,9 @@ def _calcular_tasa_culpa_taller_cambio(df: pd.DataFrame) -> pd.DataFrame:
     df_cambio['_AÑO'] = df_cambio['_AÑO'].astype(int)
     df_cambio['_MES'] = df_cambio['_MES'].astype(int)
 
-    # Step 3: deduplicar por AÑO+MES+PLACA+SINIESTRO
-    df_cambio = df_cambio.drop_duplicates(subset=['_AÑO', '_MES', '_PLACA', '_SINIESTRO'])
-
-    # Step 4: marcar culpa del taller
+    # Step 3: no deduplicar. Cada registro válido cuenta en el gráfico.
     df_cambio['_CULPA'] = df_cambio['_CAUSAL'].isin(CAUSALES_CULPA_TALLER)
-
+    
     # Agregar por mes
     resumen = df_cambio.groupby(['_AÑO', '_MES']).agg(
         total=('_PLACA', 'count'),

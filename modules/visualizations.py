@@ -16,7 +16,7 @@ from .config import PORCENTAJE_HONORARIOS
 from .data_processor import add_log, filter_authorized_savings_records
 from .fee_config import calculate_fee, load_fee_config, calculate_fees_for_df
 from .chart_config import get_chart_type_for_id, CHART_TYPE_BAR, CHART_TYPE_LINE
-from .imprevistos_processor import extraer_imprevistos_from_dataframe
+from .imprevistos_processor import extraer_imprevistos_from_dataframe, resumir_imprevistos_mensuales
 
 
 # ============================================================================
@@ -340,12 +340,22 @@ def render_grafico_tasa_imprevistos(df):
         st.warning("No hay datos con fechas válidas")
         return
     
-    # Calcular tasa de imprevistos (ACCION = 'CAMBIO' indica un imprevisto con cambio de repuesto)
-    df_mes = df_valid.groupby(['AÑO', 'MES']).agg({
-        'ACCION': lambda x: (x.str.contains('CAMBIO', na=False)).sum(),
-        'PLACA': 'count'
-    }).reset_index()
-    df_mes.columns = ['AÑO', 'MES', 'CON_IMPREVISTO', 'TOTAL']
+    df_imp_mes = resumir_imprevistos_mensuales(df_valid)
+
+    if df_imp_mes.empty:
+        st.info("No se encontraron imprevistos en los datos actuales.")
+        return
+
+    df_total = df_valid.groupby(['AÑO', 'MES']).agg(
+        TOTAL=('PLACA', 'count')
+    ).reset_index()
+
+    df_mes = df_total.merge(
+        df_imp_mes.rename(columns={'año': 'AÑO', 'mes': 'MES', 'total_imprevistos': 'CON_IMPREVISTO'}),
+        on=['AÑO', 'MES'],
+        how='left'
+    )
+    df_mes['CON_IMPREVISTO'] = df_mes['CON_IMPREVISTO'].fillna(0).astype(int)
     df_mes['TASA'] = (df_mes['CON_IMPREVISTO'] / df_mes['TOTAL']) * 100
     
     # Asegurar que AÑO y MES sean enteros válidos

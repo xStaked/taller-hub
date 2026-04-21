@@ -122,6 +122,94 @@ def extraer_imprevistos_from_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     return df_imprevistos
 
 
+def resumir_imprevistos_mensuales(df: pd.DataFrame, año: int = None) -> pd.DataFrame:
+    """
+    Resume imprevistos por mes con reglas consistentes para los gráficos:
+    - Unificar por año+mes+placa+siniestro
+    - Mantener AUTORIZADO aunque la mano de obra inicial esté en 0
+    - Excluir solo CAMBIO rechazado sin mano de obra inicial
+    """
+    df_imprevistos = extraer_imprevistos_from_dataframe(df)
+
+    if df_imprevistos.empty:
+        return pd.DataFrame(columns=['año', 'mes', 'total_imprevistos', 'culpa_taller'])
+
+    required_cols = {'año', 'mes', 'placa'}
+    if not required_cols.issubset(df_imprevistos.columns):
+        return pd.DataFrame(columns=['año', 'mes', 'total_imprevistos', 'culpa_taller'])
+
+    df_work = df_imprevistos.copy()
+
+    if año is not None:
+        df_work = df_work[df_work['año'] == año].copy()
+
+    if df_work.empty:
+        return pd.DataFrame(columns=['año', 'mes', 'total_imprevistos', 'culpa_taller'])
+
+    df_work['año'] = pd.to_numeric(df_work['año'], errors='coerce')
+    df_work['mes'] = pd.to_numeric(df_work['mes'], errors='coerce')
+    df_work = df_work[
+        df_work['año'].notna() &
+        df_work['mes'].notna() &
+        (df_work['año'] > 2000) &
+        (df_work['mes'] >= 1) &
+        (df_work['mes'] <= 12)
+    ].copy()
+
+    if df_work.empty:
+        return pd.DataFrame(columns=['año', 'mes', 'total_imprevistos', 'culpa_taller'])
+
+    df_work['año'] = df_work['año'].astype(int)
+    df_work['mes'] = df_work['mes'].astype(int)
+    df_work['placa'] = df_work['placa'].astype(str).str.upper().str.strip()
+    df_work['siniestro'] = df_work.get(
+        'siniestro',
+        pd.Series('', index=df_work.index)
+    ).astype(str).str.upper().str.strip()
+    df_work['accion'] = df_work.get(
+        'accion',
+        pd.Series('', index=df_work.index)
+    ).astype(str).str.upper().str.strip()
+    df_work['estatus'] = df_work.get(
+        'ESTATUS',
+        pd.Series('', index=df_work.index)
+    ).astype(str).str.upper().str.strip()
+
+    if 'M._DE_O._INICIAL' in df_work.columns:
+        df_work['mo_inicial'] = pd.to_numeric(df_work['M._DE_O._INICIAL'], errors='coerce').fillna(0)
+    else:
+        df_work['mo_inicial'] = 0
+
+    df_work['es_cambio'] = df_work['accion'].str.contains('CAMBIO', na=False, case=False)
+    df_work = df_work[
+        ~(
+            df_work['es_cambio'] &
+            (df_work['estatus'] == 'RECHAZADO') &
+            (df_work['mo_inicial'] <= 0)
+        )
+    ].copy()
+
+    if df_work.empty:
+        return pd.DataFrame(columns=['año', 'mes', 'total_imprevistos', 'culpa_taller'])
+
+    df_work = df_work[df_work['placa'].ne('') & df_work['placa'].ne('NAN')].copy()
+
+    detalle = (
+        df_work.groupby(['año', 'mes', 'placa', 'siniestro'], dropna=False)
+        .agg(es_culpa_taller=('es_culpa_taller', 'max'))
+        .reset_index()
+    )
+
+    return (
+        detalle.groupby(['año', 'mes'])
+        .agg(
+            total_imprevistos=('placa', 'count'),
+            culpa_taller=('es_culpa_taller', 'sum')
+        )
+        .reset_index()
+    )
+
+
 # ============================================================================
 # MERGE DATA SOURCES
 # ============================================================================
