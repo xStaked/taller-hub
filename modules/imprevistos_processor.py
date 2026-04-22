@@ -109,7 +109,11 @@ def extraer_imprevistos_from_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     if 'AÑO' in df_imprevistos.columns and 'MES' in df_imprevistos.columns:
         df_imprevistos['año'] = pd.to_numeric(df_imprevistos['AÑO'], errors='coerce')
         df_imprevistos['mes'] = pd.to_numeric(df_imprevistos['MES'], errors='coerce')
-        df_imprevistos['periodo'] = df_imprevistos['año'].astype(int).astype(str) + '-' + df_imprevistos['mes'].astype(int).astype(str).str.zfill(2)
+        valid_period = df_imprevistos['año'].notna() & df_imprevistos['mes'].notna()
+        df_imprevistos.loc[valid_period, 'periodo'] = (
+            df_imprevistos.loc[valid_period, 'año'].astype(int).astype(str) + '-' +
+            df_imprevistos.loc[valid_period, 'mes'].astype(int).astype(str).str.zfill(2)
+        )
     
     # Add taller info if available
     if 'TALLER_ORIGEN' in df_imprevistos.columns:

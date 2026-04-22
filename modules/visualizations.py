@@ -16,7 +16,7 @@ from .config import PORCENTAJE_HONORARIOS
 from .data_processor import add_log, filter_authorized_savings_records
 from .fee_config import calculate_fee, load_fee_config, calculate_fees_for_df
 from .chart_config import get_chart_type_for_id, CHART_TYPE_BAR, CHART_TYPE_LINE
-from .imprevistos_processor import extraer_imprevistos_from_dataframe, resumir_imprevistos_mensuales
+from .imprevistos_processor import resumir_imprevistos_mensuales
 
 
 # ============================================================================
@@ -752,34 +752,35 @@ def render_efectividad_valoracion(df):
     df_valid['AÑO'] = df_valid['AÑO'].astype(int)
     df_valid['MES'] = df_valid['MES'].astype(int)
 
+    # Solo registros con estatus AUTORIZADO
+    df_valid = filter_authorized_savings_records(df_valid)
+    if df_valid.empty:
+        st.warning("No hay registros AUTORIZADOS para calcular la efectividad de valoración.")
+        return
+
+    # Clave única: PLACA + SINIESTRO (si siniestro cambia, cuenta como otro vehículo cotizado)
+    df_valid['SINIESTRO_NORM'] = df_valid.get('SINIESTRO', pd.Series('', index=df_valid.index)).astype(str).str.upper().str.strip()
+    df_valid['PLACA_SINIESTRO'] = df_valid['PLACA_NORMALIZADA'] + '|' + df_valid['SINIESTRO_NORM']
+
     total_vehiculos = (
-        df_valid.groupby(['AÑO', 'MES'])['PLACA_NORMALIZADA']
+        df_valid.groupby(['AÑO', 'MES'])['PLACA_SINIESTRO']
         .nunique()
-        .reset_index(name='Cantidad vehículos revisados')
+        .reset_index(name='Cantidad vehículos cotizados')
     )
 
-    df_imprevistos = extraer_imprevistos_from_dataframe(df_valid)
-
-    if not df_imprevistos.empty and {'año', 'mes', 'placa'}.issubset(df_imprevistos.columns):
-        df_imprevistos = df_imprevistos.copy()
-        df_imprevistos['año'] = pd.to_numeric(df_imprevistos['año'], errors='coerce')
-        df_imprevistos['mes'] = pd.to_numeric(df_imprevistos['mes'], errors='coerce')
-        df_imprevistos['placa'] = df_imprevistos['placa'].astype(str).str.upper().str.strip()
-        df_imprevistos = df_imprevistos[
-            df_imprevistos['año'].notna() &
-            df_imprevistos['mes'].notna() &
-            df_imprevistos['placa'].ne('') &
-            df_imprevistos['placa'].ne('NAN')
+    # Vehículos con imprevistos = los que tienen ACCION que contenga "CAMBIO"
+    if 'ACCION' in df_valid.columns:
+        df_imprevistos = df_valid[
+            df_valid['ACCION'].astype(str).str.contains('CAMBIO', na=False, case=False)
         ].copy()
+    else:
+        df_imprevistos = pd.DataFrame()
 
-        df_imprevistos['año'] = df_imprevistos['año'].astype(int)
-        df_imprevistos['mes'] = df_imprevistos['mes'].astype(int)
-
+    if not df_imprevistos.empty:
         imprevistos_por_mes = (
-            df_imprevistos.groupby(['año', 'mes'])['placa']
+            df_imprevistos.groupby(['AÑO', 'MES'])['PLACA_SINIESTRO']
             .nunique()
             .reset_index(name='Vehículos con imprevistos')
-            .rename(columns={'año': 'AÑO', 'mes': 'MES'})
         )
     else:
         imprevistos_por_mes = pd.DataFrame(columns=['AÑO', 'MES', 'Vehículos con imprevistos'])
@@ -787,7 +788,7 @@ def render_efectividad_valoracion(df):
     resumen = total_vehiculos.merge(imprevistos_por_mes, on=['AÑO', 'MES'], how='left')
     resumen['Vehículos con imprevistos'] = resumen['Vehículos con imprevistos'].fillna(0).astype(int)
     resumen['Eficiencia (%)'] = (
-        1 - (resumen['Vehículos con imprevistos'] / resumen['Cantidad vehículos revisados'])
+        1 - (resumen['Vehículos con imprevistos'] / resumen['Cantidad vehículos cotizados'])
     ) * 100
     resumen['Eficiencia (%)'] = resumen['Eficiencia (%)'].clip(lower=0, upper=100).round(1)
 
@@ -818,11 +819,20 @@ def render_efectividad_valoracion(df):
 
     tabla_resumen = resumen[[
         'Mes',
-        'Cantidad vehículos revisados',
+        'Cantidad vehículos cotizados',
         'Vehículos con imprevistos',
         'Eficiencia (%)'
     ]].copy()
     tabla_resumen['Eficiencia (%)'] = tabla_resumen['Eficiencia (%)'].map(lambda x: f"{x:.1f}%")
+
+    # Debug temporal para validar cálculo
+    with st.expander("🔍 Debug del cálculo de efectividad"):
+        st.write("**Total vehículos cotizados (por PLACA+SINIESTRO):**")
+        st.write(total_vehiculos)
+        st.write("**Vehículos con imprevistos (por PLACA+SINIESTRO):**")
+        st.write(imprevistos_por_mes if not imprevistos_por_mes.empty else "Sin imprevistos detectados")
+        st.write("**Resumen crudo antes de formatear:**")
+        st.write(resumen[['Mes', 'Cantidad vehículos cotizados', 'Vehículos con imprevistos', 'Eficiencia (%)']])
 
     st.dataframe(
         tabla_resumen,
