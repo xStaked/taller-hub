@@ -862,3 +862,115 @@ def render_efectividad_valoracion(df):
     fig.update_yaxes(range=[0, 100], ticksuffix='%')
 
     st.plotly_chart(fig, width='stretch')
+
+
+# ============================================================================
+# GRÁFICO DE AHORRO POR COMPAÑÍA DE SEGUROS
+# ============================================================================
+
+def render_grafico_ahorro_por_compania(df):
+    """
+    Gráfico de distribución de ahorros por Compañía de Seguros.
+    Muestra una dona con el % de ahorro por compañía y una tabla
+    con columna de compañías, recuperado y porcentaje.
+    """
+    if df is None or df.empty:
+        st.info("No hay datos para mostrar distribución por compañía de seguros.")
+        return
+
+    if 'COMPAÑIA_DE_SEGUROS' not in df.columns:
+        st.warning("No se encontró la columna 'COMPAÑIA_DE_SEGUROS' en los datos.")
+        return
+
+    # Filtrar solo registros autorizados para métricas de ahorro
+    df = filter_authorized_savings_records(df)
+    if df is None or df.empty:
+        st.info("No hay registros AUTORIZADO para mostrar distribución por compañía.")
+        return
+
+    # Agrupar por compañía de seguros y sumar la diferencia
+    resumen = (
+        df.groupby('COMPAÑIA_DE_SEGUROS')['DIFERENCIA']
+        .sum()
+        .reset_index()
+    )
+
+    # Limpiar: quitar vacíos y ordenar descendente
+    resumen = resumen[resumen['COMPAÑIA_DE_SEGUROS'].notna()]
+    resumen = resumen[resumen['COMPAÑIA_DE_SEGUROS'].astype(str).str.strip() != '']
+    resumen = resumen.sort_values('DIFERENCIA', ascending=False)
+
+    if resumen.empty:
+        st.info("No hay datos de ahorro por compañía de seguros.")
+        return
+
+    total_ahorro = resumen['DIFERENCIA'].sum()
+
+    # Calcular porcentaje
+    resumen['PORCENTAJE'] = (resumen['DIFERENCIA'] / total_ahorro) * 100
+
+    # Colores corporativos + variaciones
+    colors = [
+        '#0066CC', '#00A8E8', '#00CC66', '#F59E0B',
+        '#DC2626', '#8B5CF6', '#EC4899', '#14B8A6',
+        '#F97316', '#6366F1', '#84CC16', '#06B6D4'
+    ]
+
+    # Replicar colores si hay más compañías que colores
+    color_list = []
+    for i in range(len(resumen)):
+        color_list.append(colors[i % len(colors)])
+
+    # Subtítulo
+    st.subheader("🏢 Distribución de Ahorros por Compañía de Seguros")
+
+    # Gráfico de dona
+    fig = go.Figure(data=[go.Pie(
+        labels=resumen['COMPAÑIA_DE_SEGUROS'],
+        values=resumen['DIFERENCIA'],
+        hole=0.5,
+        marker_colors=color_list,
+        textinfo="label+percent",
+        textposition="outside",
+        hovertemplate=(
+            "<b>%{label}</b><br>"
+            "Ahorro: $%{value:,.0f}<br>"
+            "Porcentaje: %{percent}<extra></extra>"
+        )
+    )])
+
+    # Anotación central con total
+    fig.add_annotation(
+        text=f"<b>Total</b><br>${total_ahorro:,.0f}",
+        showarrow=False,
+        font=dict(size=16)
+    )
+
+    fig.update_layout(
+        title_text="Distribución de Ahorros por CIA",
+        title_x=0.5,
+        height=450,
+        showlegend=True,
+        legend=dict(orientation='h', yanchor='bottom', y=-0.15, xanchor='center', x=0.5)
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Tabla con compañía, recuperado y %
+    tabla_display = resumen.copy()
+    tabla_display['DIFERENCIA_FMT'] = tabla_display['DIFERENCIA'].apply(lambda x: f"${x:,.0f}")
+    tabla_display['PORCENTAJE_FMT'] = tabla_display['PORCENTAJE'].apply(lambda x: f"{x:.1f}%")
+
+    st.markdown("**📋 Resumen por Compañía de Seguros**")
+
+    st.dataframe(
+        tabla_display[['COMPAÑIA_DE_SEGUROS', 'DIFERENCIA_FMT', 'PORCENTAJE_FMT']]
+        .rename(columns={
+            'COMPAÑIA_DE_SEGUROS': 'Compañía de Seguros',
+            'DIFERENCIA_FMT': 'Recuperado',
+            'PORCENTAJE_FMT': '%'
+        }),
+        width='stretch',
+        hide_index=True,
+        height=min(400, (len(tabla_display) + 1) * 35 + 10)
+    )

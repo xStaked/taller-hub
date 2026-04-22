@@ -32,7 +32,8 @@ from modules.visualizations import (
     render_grafico_cambio_repuestos,
     render_tabla_detalle,
     render_recuperacion_mensual,
-    render_efectividad_valoracion
+    render_efectividad_valoracion,
+    render_grafico_ahorro_por_compania
 )
 
 # Importar visualizaciones de imprevistos
@@ -271,6 +272,13 @@ def main():
     
     with col4:
         render_grafico_cambio_repuestos(df_filtered)
+    
+    st.divider()
+    
+    # =========================================================================
+    # SECCIÓN: DISTRIBUCIÓN DE AHORROS POR COMPAÑÍA DE SEGUROS
+    # =========================================================================
+    render_grafico_ahorro_por_compania(df_filtered)
     
     st.divider()
     
